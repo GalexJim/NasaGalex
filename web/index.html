@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com data:; img-src 'self' data: blob:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<title>Ruta segura a Mount Sharp · Planificador predictivo de recorridos en Marte</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&family=Barlow+Semi+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<a class="skip" href="#map">Saltar al mapa</a>
+
+<!-- ============ BARRA DE ESTADO (ARRIBA) ============ -->
+<header class="statusbar" role="banner">
+  <div class="brand">
+    <span class="brand-mark" aria-hidden="true"></span>
+    <div>
+      <strong>Ruta segura a Mount Sharp</strong>
+      <span class="brand-sub">Cráter Gale · Marte</span>
+    </div>
+  </div>
+
+  <div class="crew" role="group" aria-label="Explorador activo">
+    <!-- se llena por JS: EV1 / EV2 / EV3 -->
+  </div>
+
+  <div class="sim" role="group" aria-label="Simulación">
+    <span class="mode-pill" id="modePill">Mapa base</span>
+    <span class="clock" id="clock" title="Sol = día marciano (24 h 39 min). Hora solar local verdadera (LTST)">Sol 1 · 08:00</span>
+    <button class="icon-btn play" id="btnPlay" aria-label="Iniciar simulación" title="Iniciar / pausar (Espacio)" disabled>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path class="i-play" d="M8 5v14l11-7z"/><path class="i-pause" d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg>
+    </button>
+    <div class="speed" role="radiogroup" aria-label="Velocidad">
+      <button role="radio" aria-checked="true" data-speed="1">x1</button>
+      <button role="radio" aria-checked="false" data-speed="10">x10</button>
+      <button role="radio" aria-checked="false" data-speed="50">x50</button>
+    </div>
+    <span class="km" id="kmReadout">0,0 / 0,0 km</span>
+  </div>
+
+  <div class="status-right">
+    <span class="realdata" title="Capas NASA (MOLA/HRSC, THEMIS, Viking, CRISM, OMEGA) y clima REMS de Curiosity. El movimiento del explorador es simulado.">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/></svg>Simulación con datos reales</span>
+    <span class="conn" id="connBadge" title="Estado de conexión con el backend">Modo local</span>
+    <button class="icon-btn" id="btnConditions" title="Condiciones (D)" aria-label="Ver condiciones">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19h16M6 16V9m4 7V5m4 11v-5m4 5V7" /></svg><span>Condiciones</span></button>
+    <button class="icon-btn" id="btnTheme" title="Tema claro / oscuro" aria-label="Cambiar tema">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z"/></svg></button>
+    <button class="icon-btn" id="btnMotion" title="Reducir movimiento" aria-label="Reducir movimiento" aria-pressed="false">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h4l2-5 4 10 2-5h4"/></svg></button>
+    <button class="icon-btn" id="btnHelp" title="Ayuda y atajos (?)" aria-label="Ayuda">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5V14M12 17.5v.5"/></svg></button>
+  </div>
+</header>
+
+<!-- Avisos ligeros (banner arriba) -->
+<div class="banners" id="banners" aria-live="polite"></div>
+
+<main class="stage" id="stage">
+  <!-- ============ MAPA BASE (siempre debajo) ============ -->
+  <div class="map" id="map" tabindex="0" aria-label="Mapa del cráter Gale. Clic para abrir opciones en un punto.">
+    <div class="world" id="world">
+      <img id="basemap" alt="" draggable="false">
+      <canvas id="overlay" width="1200" height="1200"></canvas>
+      <canvas id="contours" width="1200" height="1200"></canvas>
+      <svg id="vector" viewBox="0 0 1200 1200" aria-hidden="true"></svg>
+    </div>
+    <div class="markers" id="markers"></div>
+  </div>
+  <div class="map3d" id="map3d" hidden aria-label="Vista 3D del terreno"></div>
+
+  <!-- Cambiador de vista -->
+  <div class="viewswitch" role="radiogroup" aria-label="Vista del mapa">
+    <button role="radio" aria-checked="true" data-view="2d">Mapa 2D</button>
+    <button role="radio" aria-checked="false" data-view="3d">Relieve 3D</button>
+  </div>
+  <div class="zoom" id="zoomCtl">
+    <button aria-label="Acercar" data-zoom="in">+</button>
+    <button aria-label="Alejar" data-zoom="out">−</button>
+    <button aria-label="Ajustar a la vista" data-zoom="fit" title="Ver todo">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+  </div>
+  <div class="ctl3d" id="ctl3d" hidden>
+    <label>Exageración vertical <input type="range" id="exag" min="1" max="6" step="0.5" value="2.5"><output id="exagOut">2,5×</output></label>
+    <label class="check"><input type="checkbox" id="follow3d" checked> Seguir al explorador</label>
+  </div>
+
+  <!-- ============ IZQUIERDA: capas y filtros ============ -->
+  <aside class="leftpanel" id="leftPanel" aria-label="Capas y filtros">
+    <button class="lp-toggle" id="lpToggle" aria-expanded="true" aria-controls="lpBody">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4"/></svg>
+      <span>Capas y filtros</span>
+    </button>
+    <div class="lp-body" id="lpBody">
+      <div class="tabs" role="tablist">
+        <button role="tab" aria-selected="true" data-lptab="capas">Capas</button>
+        <button role="tab" aria-selected="false" data-lptab="objetivos">Objetivos</button>
+        <button role="tab" aria-selected="false" data-lptab="ruta">Ruta</button>
+      </div>
+
+      <section class="lp-sec" data-lpsec="capas">
+        <h3>Mapa base</h3>
+        <div class="seg" id="baseSeg" role="radiogroup" aria-label="Mapa base">
+          <button role="radio" aria-checked="true" data-base="relief">Relieve</button>
+          <button role="radio" aria-checked="false" data-base="color">Altimetría color</button>
+          <button role="radio" aria-checked="false" data-base="thermal">Térmico</button>
+        </div>
+        <h3>Capa de análisis</h3>
+        <div class="layer-list" id="layerList" role="radiogroup" aria-label="Capa de análisis"></div>
+        <label class="slider">Opacidad <input type="range" id="opacity" min="0.1" max="1" step="0.05" value="0.55"></label>
+        <div class="legend" id="legend"></div>
+        <h3>Referencias</h3>
+        <label class="check"><input type="checkbox" id="chkContours"> Curvas de nivel (cada 500 m)</label>
+        <label class="check"><input type="checkbox" id="chkTraverse" checked> Recorrido real de Curiosity</label>
+        <label class="check"><input type="checkbox" id="chkCrism" checked> Huellas espectrales CRISM</label>
+      </section>
+
+      <section class="lp-sec" data-lpsec="objetivos" hidden>
+        <h3>Mostrar en el mapa</h3>
+        <div class="chips" id="typeChips"></div>
+        <label class="slider">Solo a menos de <output id="distOut">60 km</output> de la ruta
+          <input type="range" id="distFilter" min="1" max="60" step="1" value="60"></label>
+        <ul class="obj-list" id="objList"></ul>
+      </section>
+
+      <section class="lp-sec" data-lpsec="ruta" hidden>
+        <h3>Pesos del planificador</h3>
+        <p class="hint">Cambian cómo el algoritmo A* valora el riesgo. Se recalcula en una grilla de 177 m.</p>
+        <label class="slider">Peso del riesgo del modelo <output id="rwOut">4</output>
+          <input type="range" id="riskW" min="0" max="10" step="0.5" value="4"></label>
+        <label class="slider">Peso de la pendiente <output id="swOut">3</output>
+          <input type="range" id="slopeW" min="0" max="10" step="0.5" value="3"></label>
+        <label class="slider">Pendiente máxima permitida <output id="msOut">20°</output>
+          <input type="range" id="maxSlope" min="10" max="25" step="1" value="20"></label>
+        <h3>Paradas</h3>
+        <div id="stopList" class="stop-list"></div>
+        <button class="btn primary block" id="btnRecalc">Recalcular ruta</button>
+        <button class="btn ghost block" id="btnResetRoute">Volver a la ruta del modelo</button>
+        <h3>Umbrales de alerta</h3>
+        <label class="slider">Alerta crítica si la pendiente supera <output id="critOut">15°</output>
+          <input type="range" id="critSlope" min="10" max="20" step="1" value="15"></label>
+        <label class="slider">Aviso si la facilidad de paso baja de <output id="travOut">0,25</output>
+          <input type="range" id="travThr" min="0.05" max="0.5" step="0.05" value="0.25"></label>
+      </section>
+    </div>
+  </aside>
+
+  <!-- ============ DERECHA: íconos fijos + panel lateral ============ -->
+  <nav class="rail" aria-label="Paneles">
+    <button class="rail-btn" data-panel="misiones" aria-label="Misiones (M)" title="Misiones (M)">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 21V4m0 0h11l-2 4 2 4H5"/></svg>
+      <span class="lbl">Misiones</span><span class="count" data-count="misiones" hidden>0</span></button>
+    <button class="rail-btn" data-panel="bitacora" aria-label="Bitácora (B)" title="Bitácora (B)">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/></svg>
+      <span class="lbl">Bitácora</span><span class="count" data-count="bitacora" hidden>0</span></button>
+    <button class="rail-btn" data-panel="hallazgos" aria-label="Hallazgos (H)" title="Hallazgos (H)">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-6-5.5-6-10a6 6 0 0 1 12 0c0 4.5-6 10-6 10z"/><circle cx="12" cy="11" r="2"/></svg>
+      <span class="lbl">Hallazgos</span><span class="count" data-count="hallazgos" hidden>0</span></button>
+  </nav>
+  <aside class="sidepanel" id="sidePanel" aria-live="polite" hidden>
+    <header class="sp-head"><h2 id="spTitle">Panel</h2>
+      <button class="icon-btn" id="spClose" aria-label="Cerrar panel">✕</button></header>
+    <div class="sp-body" id="spBody"></div>
+  </aside>
+
+  <!-- ============ ABAJO ============ -->
+  <section class="dock" id="dock" hidden>
+    <div class="dock-plan" id="dockPlan" hidden></div>
+    <div class="dock-walk" id="dockWalk" hidden>
+      <div class="profile" id="profile" aria-label="Perfil de altura de la ruta"></div>
+      <div class="live" id="live" aria-label="Datos en vivo"></div>
+    </div>
+  </section>
+  <button class="btn report" id="btnReport" title="Reportar en la posición del explorador (R)">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 21V4h10l-1.5 3.5L16 11H6"/></svg>Reportar aquí</button>
+  <div class="stagecard" id="stageCard" hidden role="dialog" aria-live="assertive"></div>
+
+  <!-- Junto al punto -->
+  <div class="ctxmenu" id="ctxMenu" hidden role="menu"></div>
+  <div class="minicard" id="miniCard" hidden role="dialog"></div>
+</main>
+
+<!-- ============ VENTANAS CENTRALES ============ -->
+<div class="scrim" id="scrim" hidden></div>
+<div class="modal" id="modal" role="dialog" aria-modal="true" hidden></div>
+
+<!-- ============ VISTAS COMPLETAS ============ -->
+<section class="fullview" id="dashboard" hidden aria-label="Condiciones"></section>
+<section class="fullview" id="summary" hidden aria-label="Resumen de la misión"></section>
+
+<div class="toast" id="toast" role="status" hidden></div>
+<div class="tour" id="tour" hidden></div>
+<div class="tooltip" id="tooltip" role="tooltip" hidden></div>
+
+<script src="data/mars_data.js"></script>
+<script src="vendor/three.min.js"></script>
+<script src="vendor/OrbitControls.js"></script>
+<script src="js/core.js"></script>
+<script src="js/charts.js"></script>
+<script src="js/map2d.js"></script>
+<script src="js/scene3d.js"></script>
+<script src="js/api.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
