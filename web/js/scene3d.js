@@ -43,6 +43,31 @@
     S3.ready = true;
     return true;
   };
+  // Base procedural (relieve sombreado calculado desde el DEM). Se usa cuando el navegador
+  // bloquea las imágenes locales (file://) como textura WebGL.
+  function proceduralBase() {
+    const G = MR.G, Z = MR.F.dem, lo = MR.D.layers.dem.min, hi = MR.D.layers.dem.max, span = (hi - lo) || 1;
+    const stops = [[0, 112, 52, 32], [0.25, 150, 74, 42], [0.5, 186, 108, 64], [0.75, 214, 150, 98], [1, 236, 206, 160]];
+    const small = document.createElement("canvas"); small.width = small.height = G;
+    const sctx = small.getContext("2d"), img = sctx.createImageData(G, G), d = img.data;
+    const at = (x, y) => Z[Math.min(G - 1, Math.max(0, y)) * G + Math.min(G - 1, Math.max(0, x))];
+    for (let y = 0; y < G; y++) for (let x = 0; x < G; x++) {
+      const t = (Z[y * G + x] - lo) / span;
+      let k = 0; while (k < stops.length - 2 && t > stops[k + 1][0]) k++;
+      const a = stops[k], b = stops[k + 1], f = Math.min(1, Math.max(0, (t - a[0]) / (b[0] - a[0])));
+      const dx = (at(x + 1, y) - at(x - 1, y)) / 88, dy = (at(x, y + 1) - at(x, y - 1)) / 88;
+      const shade = Math.min(1.35, Math.max(0.45, 0.85 + 1.6 * (dx * 0.6 + dy * 0.8) * -1));
+      const i = (y * G + x) * 4;
+      for (let c = 0; c < 3; c++) d[i + c] = Math.min(255, (a[c + 1] + (b[c + 1] - a[c + 1]) * f) * shade);
+      d[i + 3] = 255;
+    }
+    sctx.putImageData(img, 0, 0);
+    const big = document.createElement("canvas"); big.width = big.height = 1200;
+    const bctx = big.getContext("2d"); bctx.imageSmoothingEnabled = true; bctx.imageSmoothingQuality = "high";
+    bctx.drawImage(small, 0, 0, 1200, 1200);
+    return big;
+  }
+  function isTainted(c) { try { c.getContext("2d").getImageData(0, 0, 1, 1); return false; } catch (e) { return true; } }
   function buildTerrain() {
     if (terrain) { scene.remove(terrain); terrain.geometry.dispose(); }
     const G = MR.G, geo = new THREE.PlaneGeometry(SIZE, SIZE, G - 1, G - 1);
@@ -50,7 +75,7 @@
     const pos = geo.attributes.position, Z = MR.F.dem, lo = MR.D.layers.dem.min;
     for (let i = 0; i < pos.count; i++) pos.setY(i, ((Z[i] - lo) / 1000 / KM_PER_UNIT) * exag);
     geo.computeVertexNormals();
-    const tex = new THREE.Texture(S3.textureCanvas || document.getElementById("basemap"));
+    const tex = new THREE.Texture(S3.textureCanvas || proceduralBase());
     tex.needsUpdate = true; tex.anisotropy = 4;
     if (THREE.sRGBEncoding) tex.encoding = THREE.sRGBEncoding;
     terrain = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ map: tex, emissive: 0x777777, emissiveMap: tex }));
@@ -58,9 +83,12 @@
   }
   // compone mapa base + capa de análisis en una textura
   S3.setTexture = function (baseImg, overlayCanvas, opacity) {
-    const c = document.createElement("canvas"); c.width = c.height = 1200; const ctx = c.getContext("2d");
+    let c = document.createElement("canvas"); c.width = c.height = 1200; let ctx = c.getContext("2d");
     try { ctx.drawImage(baseImg, 0, 0, 1200, 1200); } catch (e) { /* imagen aún no cargada */ }
+    let target = c;
+    if (isTainted(c)) { target = proceduralBase(); ctx = target.getContext("2d"); }  // file://: imagen bloqueada por el navegador
     if (overlayCanvas) { ctx.globalAlpha = opacity; ctx.imageSmoothingEnabled = true; ctx.drawImage(overlayCanvas, 0, 0, 1200, 1200); }
+    c = target;
     S3.textureCanvas = c;
     if (terrain) {
       const tx = new THREE.Texture(c); tx.needsUpdate = true; if (THREE.sRGBEncoding) tx.encoding = THREE.sRGBEncoding;
