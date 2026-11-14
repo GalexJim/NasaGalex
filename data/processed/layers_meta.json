@@ -1,0 +1,26 @@
+{
+  "bbox": [
+    137.35,
+    -4.77,
+    137.55,
+    -4.57
+  ],
+  "size": 1200,
+  "dx_m": 9.846319100434505,
+  "dy_m": 9.879116253884334,
+  "extent": [
+    137.35,
+    137.55,
+    -4.77,
+    -4.57
+  ],
+  "cell_area_m2": 97.27293106603429,
+  "sources": {
+    "dem": "HiRISE stereo DEM (Gale_DEM_SMG_1m), Mars Trek",
+    "optical": "HiRISE mosaic (curiosity_hirise_mosaic), Mars Trek",
+    "thermal": "THEMIS daytime IR 100 m mosaic, ASU JMARS",
+    "color_index": "Viking MDIM 2.1 color mosaic, Mars Trek",
+    "minerals": "OMEGA/CRISM hydrous mineral detections, Mars Trek",
+    "traverse": "Curiosity traverse, Mars Trek"
+  }
+}

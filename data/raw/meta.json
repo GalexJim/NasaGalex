@@ -1,0 +1,14 @@
+{
+  "site": "Gale Crater - Aeolis Mons north flank",
+  "bbox": [
+    137.35,
+    -4.77,
+    137.55,
+    -4.57
+  ],
+  "crs": "Mars 2000 planetocentric (EPSG:104905)",
+  "dem_size": 2400,
+  "optical_size": 4096,
+  "context_size": 1200,
+  "mars_radius_m": 3396190.0
+}

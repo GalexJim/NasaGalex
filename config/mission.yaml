@@ -1,0 +1,24 @@
+site: Gale Crater - flanco norte de Aeolis Mons
+crs: EPSG:104905
+bbox: [137.35, -4.77, 137.55, -4.57]
+grid_size: 1200
+
+start: [137.4416, -4.5895]
+goal: [137.3900, -4.7300]
+
+model:
+  positive_buffer_m: 15.0
+  negative_buffer_m: 60.0
+  hazard_fraction: 1.0
+  n_estimators: 300
+  max_depth: 12
+  min_samples_leaf: 5
+  seed: 7
+
+planner:
+  risk_weight: 6.0
+  slope_weight: 3.0
+  max_slope_deg: 20.0
+  caution_slope_deg: 8.0
+  min_traversability: 0.25
+  margin_cells: 2

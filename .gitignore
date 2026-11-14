@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ipynb_checkpoints/
+data/cache/
+data/raw/rems/**/*.TAB
+data/processed/layers.npz
+outputs/*.npy
+*.log
+.DS_Store
+Thumbs.db

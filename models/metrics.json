@@ -1,0 +1,55 @@
+{
+  "metrics": {
+    "validation": {
+      "samples": 672,
+      "positives": 584,
+      "roc_auc": 0.827054794520548,
+      "average_precision": 0.968088971767369,
+      "accuracy": 0.8869047619047619,
+      "f1": 0.9372937293729373,
+      "confusion_matrix": [
+        [
+          28,
+          60
+        ],
+        [
+          16,
+          568
+        ]
+      ]
+    },
+    "test": {
+      "samples": 3605,
+      "positives": 1138,
+      "roc_auc": 0.9346623229796761,
+      "average_precision": 0.8708672295755309,
+      "accuracy": 0.8313453536754508,
+      "f1": 0.7221206581352834,
+      "confusion_matrix": [
+        [
+          2207,
+          260
+        ],
+        [
+          348,
+          790
+        ]
+      ]
+    },
+    "train": {
+      "samples": 7641,
+      "roc_auc": 0.9977176332831996
+    },
+    "positives": 5959,
+    "negatives": 5959
+  },
+  "feature_importance": {
+    "slope": 0.09185274433638733,
+    "roughness": 0.12627397198540807,
+    "texture": 0.19288390646126774,
+    "gradient": 0.0861021916118957,
+    "optical": 0.10900531383035134,
+    "thermal": 0.048171703984789885,
+    "color_index": 0.34571016778990005
+  }
+}
