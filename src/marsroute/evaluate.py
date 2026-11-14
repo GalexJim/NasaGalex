@@ -16,7 +16,7 @@ def sample_layers(cells: np.ndarray, layers: dict) -> dict[str, np.ndarray]:
     columns = cells[:, 1]
     return {
         name: layers[name][rows, columns]
-        for name in ("slope", "roughness", "thermal", "traverse_distance")
+        for name in ("slope", "roughness", "thermal", "dem", "traverse_distance")
     }
 
 
@@ -32,6 +32,7 @@ def summarize_route(
     values = sample_layers(cells, layers)
     slope = values["slope"]
     route_risk = 1.0 - traversability[cells[:, 0], cells[:, 1]]
+    elevation = values["dem"]
     summary = {
         "length_km": route_length_km(cells, dx_m, dy_m),
         "mean_slope_deg": float(np.mean(slope)),
@@ -40,8 +41,12 @@ def summarize_route(
         "mean_roughness_m": float(np.mean(values["roughness"])),
         "mean_traversability": float(np.mean(1.0 - route_risk)),
         "min_traversability": float(np.min(1.0 - route_risk)),
+        "traverse_likeness": float(np.mean(route_risk <= 0.5)),
         "mean_risk": float(np.mean(route_risk)),
         "max_risk": float(np.max(route_risk)),
+        "start_elevation_m": float(elevation[0]),
+        "max_elevation_m": float(np.max(elevation)),
+        "elevation_gain_m": float(elevation[-1] - elevation[0]),
         "mean_thermal_dn": float(np.mean(values["thermal"])),
         "mean_traverse_distance_km": float(np.mean(values["traverse_distance"])),
     }

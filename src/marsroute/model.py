@@ -21,9 +21,7 @@ FEATURES = (
     "roughness",
     "texture",
     "gradient",
-    "optical",
     "thermal",
-    "color_index",
 )
 
 
@@ -33,8 +31,9 @@ class TrainingReport:
     feature_importance: dict
 
 
-def feature_matrix(layers: dict, features=FEATURES) -> np.ndarray:
-    return np.stack([layers[name] for name in features], axis=-1).astype("float32")
+def feature_matrix(layers: dict, features=None) -> np.ndarray:
+    names = FEATURES if features is None else features
+    return np.stack([layers[name] for name in names], axis=-1).astype("float32")
 
 
 def path_progress(layers: dict) -> np.ndarray:

@@ -151,11 +151,14 @@ def main() -> None:
     plot_integrated(layers, traversability, meta, maps / "integrated_view.png")
     plot_rems(maps / "rems_environment.png")
 
-    region = ROOT / "data" / "raw" / "gale_region.jpg"
+    region = ROOT / "data" / "raw" / "gale_context.jpg"
     if region.exists():
+        region_bbox = json.loads(
+            (ROOT / "data" / "raw" / "meta.json").read_text(encoding="utf-8")
+        )["region_bbox"]
         plot_context(
             np.asarray(Image.open(region).convert("RGB")),
-            (136.9, -5.1, 138.0, -3.9),
+            tuple(region_bbox),
             tuple(config["bbox"]),
             maps / "context.png",
         )

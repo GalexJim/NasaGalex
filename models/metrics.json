@@ -1,55 +1,53 @@
 {
   "metrics": {
     "validation": {
-      "samples": 672,
-      "positives": 584,
-      "roc_auc": 0.827054794520548,
-      "average_precision": 0.968088971767369,
-      "accuracy": 0.8869047619047619,
-      "f1": 0.9372937293729373,
+      "samples": 100,
+      "positives": 99,
+      "roc_auc": 1.0,
+      "average_precision": 1.0,
+      "accuracy": 0.99,
+      "f1": 0.9949748743718593,
       "confusion_matrix": [
         [
-          28,
-          60
+          0,
+          1
         ],
         [
-          16,
-          568
+          0,
+          99
         ]
       ]
     },
     "test": {
-      "samples": 3605,
-      "positives": 1138,
-      "roc_auc": 0.9346623229796761,
-      "average_precision": 0.8708672295755309,
-      "accuracy": 0.8313453536754508,
-      "f1": 0.7221206581352834,
+      "samples": 928,
+      "positives": 184,
+      "roc_auc": 0.9130069541841982,
+      "average_precision": 0.7152543283954811,
+      "accuracy": 0.8523706896551724,
+      "f1": 0.4981684981684982,
       "confusion_matrix": [
         [
-          2207,
-          260
+          723,
+          21
         ],
         [
-          348,
-          790
+          116,
+          68
         ]
       ]
     },
     "train": {
-      "samples": 7641,
-      "roc_auc": 0.9977176332831996
+      "samples": 962,
+      "roc_auc": 1.0
     },
-    "positives": 5959,
-    "negatives": 5959
+    "positives": 995,
+    "negatives": 995
   },
   "feature_importance": {
-    "slope": 0.09185274433638733,
-    "roughness": 0.12627397198540807,
-    "texture": 0.19288390646126774,
-    "gradient": 0.0861021916118957,
-    "optical": 0.10900531383035134,
-    "thermal": 0.048171703984789885,
-    "color_index": 0.34571016778990005
+    "slope": 0.43387614038781114,
+    "roughness": 0.45269360684178894,
+    "texture": 0.07846102789712278,
+    "gradient": 0.027075244697986924,
+    "thermal": 0.007893980175290265
   }
 }

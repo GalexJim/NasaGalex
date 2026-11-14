@@ -1,14 +1,20 @@
 {
-  "site": "Gale Crater - Aeolis Mons north flank",
+  "site": "Mount Sharp (Aeolis Mons), Gale Crater",
   "bbox": [
-    137.35,
-    -4.77,
-    137.55,
-    -4.57
+    137.18,
+    -5.45,
+    138.08,
+    -4.55
+  ],
+  "region_bbox": [
+    136.6,
+    -6.1,
+    138.9,
+    -3.9
   ],
   "crs": "Mars 2000 planetocentric (EPSG:104905)",
-  "dem_size": 2400,
-  "optical_size": 4096,
-  "context_size": 1200,
+  "dem_size": 1200,
+  "optical_size": 1200,
+  "context_size": 1400,
   "mars_radius_m": 3396190.0
 }

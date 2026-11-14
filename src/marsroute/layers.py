@@ -76,6 +76,21 @@ def points_distance_km(lon: np.ndarray, lat: np.ndarray, points, geom: Geometry)
     return best / 1000.0
 
 
+def rasterize_boxes(boxes, geom: Geometry) -> np.ndarray:
+    mask = np.zeros((geom.size, geom.size), dtype=bool)
+    west, south, east, north = geom.bbox
+    for box_west, box_south, box_east, box_north in boxes:
+        column0 = int(np.floor((box_west - west) / (east - west) * geom.size))
+        column1 = int(np.ceil((box_east - west) / (east - west) * geom.size))
+        row0 = int(np.floor((north - box_north) / (north - south) * geom.size))
+        row1 = int(np.ceil((north - box_south) / (north - south) * geom.size))
+        column0, column1 = max(column0, 0), min(column1, geom.size)
+        row0, row1 = max(row0, 0), min(row1, geom.size)
+        if column1 > column0 and row1 > row0:
+            mask[row0:row1, column0:column1] = True
+    return mask
+
+
 def rasterize_paths(paths, geom: Geometry) -> np.ndarray:
     mask = np.zeros((geom.size, geom.size), dtype=bool)
     west, south, east, north = geom.bbox
@@ -110,7 +125,7 @@ def build_layers(raw_dir: Path, out_dir: Path, bbox, size: int) -> dict:
     slope = resize(slope_full, size)
     roughness = resize(roughness_full, size)
 
-    optical_full = np.asarray(Image.open(raw_dir / "gale_hirise.jpg").convert("L"), dtype="float32")
+    optical_full = np.asarray(Image.open(raw_dir / "gale_optical.jpg").convert("L"), dtype="float32")
     texture_full = local_std(optical_full, 7)
     gradient_full = gradient_magnitude(optical_full)
     optical = resize(optical_full, size)
@@ -131,6 +146,13 @@ def build_layers(raw_dir: Path, out_dir: Path, bbox, size: int) -> dict:
     else:
         mineral_distance = np.full((size, size), np.nan, dtype="float32")
 
+    crism = json.loads((raw_dir / "crism_sites.json").read_text(encoding="utf-8"))
+    crism_boxes = [
+        (item["west"], item["south"], item["east"], item["north"])
+        for item in crism["features"]
+    ]
+    spectral_coverage = rasterize_boxes(crism_boxes, geom).astype("float32")
+
     traverse = json.loads((raw_dir / "curiosity_traverse.json").read_text(encoding="utf-8"))
     traverse_mask = rasterize_paths(traverse["paths"], geom)
     traverse_distance = distance_km_from_mask(traverse_mask, geom.dx_m, geom.dy_m)
@@ -145,6 +167,7 @@ def build_layers(raw_dir: Path, out_dir: Path, bbox, size: int) -> dict:
         "gradient": gradient.astype("float32"),
         "thermal": thermal.astype("float32"),
         "color_index": color_index.astype("float32"),
+        "spectral_coverage": spectral_coverage.astype("float32"),
         "mineral_distance": mineral_distance.astype("float32"),
         "traverse_distance": traverse_distance.astype("float32"),
         "valid": valid.astype("uint8"),
@@ -158,10 +181,11 @@ def build_layers(raw_dir: Path, out_dir: Path, bbox, size: int) -> dict:
         "extent": list(geom.extent),
         "cell_area_m2": geom.dx_m * geom.dy_m,
         "sources": {
-            "dem": "HiRISE stereo DEM (Gale_DEM_SMG_1m), Mars Trek",
-            "optical": "HiRISE mosaic (curiosity_hirise_mosaic), Mars Trek",
+            "dem": "MOLA/HRSC blended DEM 200 m (Mars_MOLA_blend200ppx_HRSC_DEM_clon0dd_200mpp_lzw), Mars Trek",
+            "optical": "MOLA/HRSC color shaded relief 200 m (Mars_MOLA_blend200ppx_HRSC_ClrShade_clon0dd_200mpp), Mars Trek",
             "thermal": "THEMIS daytime IR 100 m mosaic, ASU JMARS",
-            "color_index": "Viking MDIM 2.1 color mosaic, Mars Trek",
+            "color_index": "Viking MDIM 2.1 color mosaic 232 m, Mars Trek",
+            "spectral_coverage": "CRISM MTRDR targeted footprints (humex FRT sites), Mars Trek",
             "minerals": "OMEGA/CRISM hydrous mineral detections, Mars Trek",
             "traverse": "Curiosity traverse, Mars Trek",
         },

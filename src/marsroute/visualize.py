@@ -50,19 +50,23 @@ def plot_layer_grid(layers: dict, meta: dict, path: Path) -> None:
     extent = _extent(meta)
     shade = hillshade(layers["dem"], meta["dx_m"], meta["dy_m"])
     panels = [
-        ("Elevación (DEM HiRISE)", layers["dem"], "terrain"),
-        ("Pendiente (°)", layers["slope"], "viridis"),
-        ("Rugosidad (m)", layers["roughness"], "magma"),
-        ("Óptico (HiRISE)", layers["optical"], "gray"),
-        ("Textura óptica", layers["texture"], "gray"),
-        ("Gradiente óptico", layers["gradient"], "gray"),
-        ("Térmico diurno (THEMIS)", layers["thermal"], "inferno"),
-        ("Índice de color (Viking)", layers["color_index"], "coolwarm"),
-        ("Distancia a minerales hidratados (km)", layers["mineral_distance"], "plasma"),
+        ("Elevación (DEM MOLA/HRSC 200 m)", layers["dem"], "terrain", False),
+        ("Pendiente (°)", layers["slope"], "viridis", False),
+        ("Rugosidad (m)", layers["roughness"], "magma", True),
+        ("Óptico (HRSC color)", layers["optical"], "gray", True),
+        ("Textura óptica", layers["texture"], "gray", True),
+        ("Gradiente óptico", layers["gradient"], "gray", True),
+        ("Térmico diurno (THEMIS 100 m)", layers["thermal"], "inferno", False),
+        ("Índice de color (Viking 232 m)", layers["color_index"], "coolwarm", True),
+        ("Cobertura espectral CRISM MTRDR", layers["spectral_coverage"], "cividis", False),
     ]
     fig, axes = plt.subplots(3, 3, figsize=(13, 13), constrained_layout=True)
-    for axis, (title, array, cmap) in zip(axes.ravel(), panels):
-        image = axis.imshow(array, extent=extent, origin="upper", cmap=cmap)
+    for axis, (title, array, cmap, stretch) in zip(axes.ravel(), panels):
+        kwargs = {}
+        if stretch:
+            low, high = np.nanpercentile(array, [2.0, 98.0])
+            kwargs = {"vmin": low, "vmax": high}
+        image = axis.imshow(array, extent=extent, origin="upper", cmap=cmap, **kwargs)
         axis.set_title(title, fontsize=10)
         axis.set_xlabel("Longitud (°E)", fontsize=8)
         axis.set_ylabel("Latitud (°N)", fontsize=8)
@@ -71,7 +75,7 @@ def plot_layer_grid(layers: dict, meta: dict, path: Path) -> None:
         axis.yaxis.set_major_locator(MaxNLocator(5))
         fig.colorbar(image, ax=axis, shrink=0.75, pad=0.02)
     axes[0, 0].imshow(shade, extent=extent, origin="upper", cmap="gray", alpha=0.35)
-    fig.suptitle("Capas de datos superpuestas - Gale Crater", fontsize=14)
+    fig.suptitle("Capas de datos superpuestas - Mount Sharp, Gale Crater", fontsize=14)
     _finish(fig, path)
 
 
@@ -108,8 +112,8 @@ def plot_route(
 ) -> None:
     extent = _extent(meta)
     shade = hillshade(layers["dem"], meta["dx_m"], meta["dy_m"])
-    optical = _stretch(layers["optical"])
-    base = np.clip(0.35 + 0.65 * shade, 0.0, 1.0) * (0.55 + 0.45 * optical)
+    optical = _stretch(layers["optical"], 1.0, 99.0)
+    base = np.clip(optical**1.5 * (0.55 + 0.45 * shade), 0.0, 1.0)
     figure, axis = plt.subplots(figsize=(11, 11), constrained_layout=True)
     axis.imshow(base, extent=extent, origin="upper", cmap="gray", vmin=0, vmax=1)
     for index, path_points in enumerate(traverse_paths):
@@ -139,11 +143,11 @@ def plot_route(
     axis.set_ylim(extent[2], extent[3])
     axis.set_xlabel("Longitud (°E)")
     axis.set_ylabel("Latitud (°N)")
-    axis.set_title("Ruta de astronauta - flanco norte de Aeolis Mons, Gale Crater")
+    axis.set_title("Ruta segura hacia la cumbre de Mount Sharp (Aeolis Mons)")
     axis.legend(loc="lower left", framealpha=0.85, fontsize=9)
     axis.grid(color="white", alpha=0.15, linewidth=0.5)
-    scale_km = 2.0
-    degrees = scale_km * 1000.0 / (np.pi / 180.0 * 3396190.0 * np.cos(np.deg2rad(-4.67)))
+    scale_km = 5.0
+    degrees = scale_km * 1000.0 / (np.pi / 180.0 * 3396190.0 * np.cos(np.deg2rad(-4.87)))
     bar_x = [extent[1] - 0.012 - degrees, extent[1] - 0.012]
     bar_y = [extent[2] + 0.006] * 2
     axis.plot(bar_x, bar_y, color="white", linewidth=6, solid_capstyle="butt", zorder=8)
@@ -151,7 +155,7 @@ def plot_route(
     axis.text(
         extent[1] - 0.012 - degrees / 2,
         extent[2] + 0.010,
-        "2 km",
+        f"{scale_km:.0f} km",
         color="black",
         ha="center",
         fontsize=9,
@@ -159,10 +163,12 @@ def plot_route(
         bbox={"facecolor": "white", "alpha": 0.8, "pad": 1.5},
     )
     text = (
-        f"Longitud: {metrics['length_km']:.2f} km\n"
+        f"Longitud: {metrics['length_km']:.1f} km\n"
+        f"Desnivel: +{metrics['elevation_gain_m']:.0f} m\n"
         f"Pendiente media: {metrics['mean_slope_deg']:.1f}°\n"
         f"Pendiente máxima: {metrics['max_slope_deg']:.1f}°\n"
-        f"Riesgo medio: {metrics['mean_risk']:.3f}"
+        f"Transitabilidad media: {metrics['mean_traversability']:.2f}\n"
+        f"Terreno tipo traverse: {100.0 * metrics['traverse_likeness']:.0f} %"
     )
     axis.text(
         0.02,
@@ -210,8 +216,8 @@ def plot_route_comparison(
     axis.set_title("Ruta aprendida frente a referencia solo-pendiente")
     axis.legend(loc="lower left", framealpha=0.85, fontsize=8.5)
     text = (
-        f"Aprendida: {metrics['length_km']:.2f} km, riesgo {metrics['mean_risk']:.3f}\n"
-        f"Solo pendiente: {baseline_metrics['length_km']:.2f} km, riesgo {baseline_metrics['mean_risk']:.3f}"
+        f"Aprendida: {metrics['length_km']:.1f} km, transitabilidad {metrics['mean_traversability']:.2f}\n"
+        f"Solo pendiente: {baseline_metrics['length_km']:.1f} km, transitabilidad {baseline_metrics['mean_traversability']:.2f}"
     )
     axis.text(
         0.02,
@@ -233,8 +239,7 @@ def plot_profile(layers: dict, meta: dict, cells: np.ndarray, path: Path) -> Non
     delta = np.diff(cells.astype("float64"), axis=0)
     steps = np.hypot(delta[:, 0] * meta["dy_m"], delta[:, 1] * meta["dx_m"])
     distance = np.concatenate([[0.0], np.cumsum(steps)])
-    smoothed = uniform_filter1d(elevation.astype("float64"), 25)
-    slope = np.degrees(np.arctan(np.abs(np.gradient(smoothed)) / max(float(np.mean(steps)), 1.0)))
+    slope = uniform_filter1d(layers["slope"][rows, columns].astype("float64"), 41)
     figure, axis = plt.subplots(figsize=(11, 4.5), constrained_layout=True)
     axis.plot(distance / 1000.0, elevation, color="#b45309", linewidth=1.8)
     axis.fill_between(distance / 1000.0, elevation.min(), elevation, color="#f59e0b", alpha=0.2)
@@ -276,14 +281,14 @@ def plot_perspective(layers: dict, meta: dict, route_lonlat: np.ndarray, path: P
         np.clip(((north - route_lonlat[:, 1]) / (north - south) * layers["dem"].shape[0]).astype(int), 0, layers["dem"].shape[0] - 1),
         np.clip(((route_lonlat[:, 0] - west) / (east - west) * layers["dem"].shape[1]).astype(int), 0, layers["dem"].shape[1] - 1),
     ]
-    axis.plot(route_lonlat[:, 0], route_lonlat[:, 1], route_elevation + 60.0, color="#f97316", linewidth=3.2, zorder=10)
-    axis.scatter(route_lonlat[0, 0], route_lonlat[0, 1], route_elevation[0] + 60.0, color="#22c55e", s=90, depthshade=False, zorder=11)
-    axis.scatter(route_lonlat[-1, 0], route_lonlat[-1, 1], route_elevation[-1] + 60.0, color="#e879f9", s=140, marker="*", depthshade=False, zorder=11)
+    axis.plot(route_lonlat[:, 0], route_lonlat[:, 1], route_elevation + 40.0, color="#f97316", linewidth=3.2, zorder=10)
+    axis.scatter(route_lonlat[0, 0], route_lonlat[0, 1], route_elevation[0] + 40.0, color="#22c55e", s=90, depthshade=False, zorder=11)
+    axis.scatter(route_lonlat[-1, 0], route_lonlat[-1, 1], route_elevation[-1] + 40.0, color="#e879f9", s=140, marker="*", depthshade=False, zorder=11)
     axis.set_xlabel("Longitud (°E)")
     axis.set_ylabel("Latitud (°N)")
     axis.set_zlabel("Elevación (m)")
-    axis.set_box_aspect((1.0, 1.0, 0.3))
-    axis.view_init(elev=38, azim=-118)
+    axis.set_box_aspect((1.0, 1.0, 0.45))
+    axis.view_init(elev=42, azim=-122)
     axis.set_title("Vista 3D del terreno y la ruta")
     _finish(figure, path)
 
@@ -291,19 +296,18 @@ def plot_perspective(layers: dict, meta: dict, route_lonlat: np.ndarray, path: P
 def plot_integrated(layers: dict, traversability: np.ndarray, meta: dict, path: Path) -> None:
     extent = _extent(meta)
     shade = hillshade(layers["dem"], meta["dx_m"], meta["dy_m"])
-    optical = _stretch(layers["optical"])
+    optical = _stretch(layers["optical"], 2.0, 98.0)
     thermal = _stretch(layers["thermal"], 5.0, 95.0)
-    red = np.clip(0.55 * optical + 0.45 * thermal, 0.0, 1.0)
-    green = np.clip(0.65 * optical + 0.35 * traversability, 0.0, 1.0)
-    blue = np.clip(0.45 * optical + 0.55 * (1.0 - thermal), 0.0, 1.0)
-    composite = np.dstack([red, green, blue]) * (0.45 + 0.55 * shade[..., None])
+    base = np.clip(optical**1.4 * (0.6 + 0.4 * shade), 0.0, 1.0)
     figure, axes = plt.subplots(1, 2, figsize=(15, 7), constrained_layout=True)
-    axes[0].imshow(composite, extent=extent, origin="upper")
-    axes[0].set_title("Vista integrada: óptico + térmico + relieve")
+    axes[0].imshow(base, extent=extent, origin="upper", cmap="gray", vmin=0, vmax=1)
+    warm = axes[0].imshow(thermal, extent=extent, origin="upper", cmap="inferno", alpha=0.45)
+    figure.colorbar(warm, ax=axes[0], shrink=0.75, label="térmico (escala relativa)")
+    axes[0].set_title("Óptico + térmico superpuestos")
     second = axes[1].imshow(traversability, extent=extent, origin="upper", cmap="RdYlGn", vmin=0, vmax=1)
     axes[1].imshow(shade, extent=extent, origin="upper", cmap="gray", alpha=0.25)
     axes[1].set_title("Transitabilidad aprendida sobre relieve")
-    figure.colorbar(second, ax=axes[1], shrink=0.8)
+    figure.colorbar(second, ax=axes[1], shrink=0.75)
     for axis in axes:
         axis.set_xlabel("Longitud (°E)")
         axis.set_ylabel("Latitud (°N)")
@@ -335,6 +339,6 @@ def plot_context(image: np.ndarray, bbox, study_bbox, path: Path) -> None:
     )
     axis.set_xlabel("Longitud (°E)")
     axis.set_ylabel("Latitud (°N)")
-    axis.set_title("Contexto regional - Gale Crater")
+    axis.set_title("Contexto regional - Gale Crater y Mount Sharp")
     axis.grid(color="white", alpha=0.2, linewidth=0.5)
     _finish(figure, path)

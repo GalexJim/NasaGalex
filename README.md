@@ -1,6 +1,6 @@
-# Mars Route Planner — Gale Crater
+# Mars Route Planner — Mount Sharp, Gale Crater
 
-Modelo base en Python que integra capas de datos orbitales de Marte y calcula una ruta segura para un astronauta en el flanco norte de Aeolis Mons, Gale Crater. Proyecto para el NASA Space Apps Challenge 2026.
+Modelo base en Python que integra capas de datos orbitales de Marte y calcula una ruta segura desde Bradbury Landing hasta la cumbre de Mount Sharp (Aeolis Mons), Gale Crater. Proyecto para el NASA Space Apps Challenge 2026.
 
 ![Ruta calculada](maps/route_map.png)
 
@@ -8,29 +8,33 @@ Modelo base en Python que integra capas de datos orbitales de Marte y calcula un
 
 | Parámetro | Valor |
 |---|---|
-| Sitio | Gale Crater, flanco norte de Aeolis Mons |
-| Bounding box | 137.35 °E – 137.55 °E, 4.77 °S – 4.57 °S |
+| Sitio | Gale Crater, macizo de Mount Sharp (Aeolis Mons) |
+| Bounding box | 137.18 °E – 138.08 °E, 5.45 °S – 4.55 °S |
 | CRS | Mars 2000 planetocéntrico (EPSG:104905) |
-| Extensión | 11.8 km × 11.8 km |
-| Grilla | 1200 × 1200 celdas (9.9 m) |
-| Inicio | 137.4416 °E, 4.5895 °S (Bradbury Landing) |
-| Objetivo | 137.3900 °E, 4.7300 °S (base del montículo) |
+| Extensión | 53.1 km × 53.3 km |
+| Grilla | 1200 × 1200 celdas (44.3 m × 44.5 m) |
+| Inicio | 137.4416 °E, 4.5895 °S (Bradbury Landing, −4503 m) |
+| Objetivo | 137.8599 °E, 5.3709 °S (cumbre, +830 m) |
+| Desnivel | +5 333 m |
+
+La cumbre del macizo queda en el extremo sur del área: el DEM de 200 m la sitúa en 137.86 °E, 5.37 °S con 832 m, unos 5.3 km por encima del fondo del cráter. El área incluye el corredor de aterrizaje, el campo de dunas de Bagnold y los flancos norte, oeste y sur del montículo.
 
 ## Capas de datos
 
 | Capa | Tipo | Producto | Resolución | Fuente |
 |---|---|---|---|---|
-| `dem` | Topográfico | HiRISE stereo DEM `Gale_DEM_SMG_1m` | 1 m | NASA Mars Trek |
-| `slope`, `roughness` | Topográfico | Derivadas del DEM | 9.9 m | Cálculo propio |
-| `optical` | Óptico | Mosaico HiRISE `curiosity_hirise_mosaic` | 0.25 m | NASA Mars Trek |
-| `texture`, `gradient` | Óptico | Derivadas del mosaico | 9.9 m | Cálculo propio |
+| `dem` | Topográfico | MOLA/HRSC blended DEM `Mars_MOLA_blend200ppx_HRSC_DEM` | 200 m | NASA Mars Trek |
+| `slope`, `roughness` | Topográfico | Derivadas del DEM | 44 m | Cálculo propio |
+| `optical` | Óptico | MOLA/HRSC color shaded relief `..._ClrShade_200mpp` | 200 m | NASA Mars Trek |
+| `texture`, `gradient` | Óptico | Derivadas del relieve | 44 m | Cálculo propio |
 | `thermal` | Térmico | THEMIS Day IR 100 m | 100 m | ASU JMARS |
 | `color_index` | Multiespectral | Viking MDIM 2.1 color | 232 m | NASA Mars Trek |
+| `spectral_coverage` | Espectral | Huellas CRISM MTRDR (sitios FRT) | vector | NASA Mars Trek |
 | `mineral_distance` | Espectral | Detecciones hidratadas OMEGA/CRISM | puntos | NASA Mars Trek |
+| `traverse_distance` | Referencia | Recorrido de Curiosity (19 188 puntos) | 44 m | NASA Mars Trek |
 | REMS | Atmosférico | ENVRDR sol 100 y sol 4500 | 1 s | NASA PDS |
-| `traverse_distance` | Referencia | Recorrido de Curiosity (19 188 puntos) | 9.9 m | NASA Mars Trek |
 
-Los datos crudos están en `data/raw/`. La capa espectral no tiene detecciones dentro del área: las más cercanas están a 18 km, así que se usa como contexto regional y no como restricción local.
+Seis tipos de datos se superponen en la misma grilla: topográfico, óptico, térmico, multiespectral, espectral y atmosférico. La cobertura CRISM MTRDR cubre solo el 6.4 % del área (flanco oeste, producto `FRT0000A091_07_IF165J_MTR3`). Hay una detección de minerales hidratados OMEGA/CRISM en el borde oeste del recuadro (137.20 °E, 5.00 °S) y otra fuera, al este.
 
 ![Capas](maps/layers_overview.png)
 
@@ -38,41 +42,43 @@ Los datos crudos están en `data/raw/`. La capa espectral no tiene detecciones d
 
 Clasificador de bosque aleatorio entrenado con el recorrido real de Curiosity como etiqueta positiva.
 
-- Positivos: celdas a ≤ 15 m del recorrido (5 959 muestras).
-- Negativos: celdas a > 60 m del recorrido con pendiente > 15° o textura óptica sobre el percentil 75 (5 959 muestras).
-- Variables: pendiente, rugosidad, textura óptica, gradiente óptico, albedo óptico, térmico e índice de color.
+- Positivos: celdas a ≤ 60 m del recorrido (995 muestras).
+- Negativos: celdas a > 200 m del recorrido con pendiente > 15° o textura óptica sobre el percentil 75 (995 muestras).
+- Variables: pendiente, rugosidad, textura óptica, gradiente óptico y térmico. Se excluyen albedo óptico e índice de color como predictoras porque su calibración cambia con la iluminación y la cubierta de polvo entre el corredor de aterrizaje y el macizo; quedan como capas de contexto.
 - Bosque de 300 árboles, profundidad 12, mínimo 5 muestras por hoja, clases balanceadas.
 - Partición espacial 70/15/15 por progreso a lo largo del recorrido, no aleatoria, para evitar fuga de información.
 
-| Conjunto | Muestras | ROC AUC | Average precision | F1 |
-|---|---|---|---|---|
-| Validación | 672 | 0.827 | 0.968 | 0.937 |
-| Prueba | 3 605 | 0.935 | 0.871 | 0.722 |
+| Conjunto | Muestras | Positivos | ROC AUC | Average precision | F1 |
+|---|---|---|---|---|---|
+| Prueba | 928 | 184 | 0.913 | 0.715 | 0.498 |
 
-Importancia relativa: índice de color 0.35, textura óptica 0.19, rugosidad 0.13, albedo 0.11, pendiente 0.09, gradiente 0.09, térmico 0.05.
+Importancia relativa: rugosidad 0.45, pendiente 0.43, textura óptica 0.08, gradiente óptico 0.03, térmico 0.01.
 
 ## Planificación de ruta
 
 La probabilidad de transitabilidad `p` se convierte en un costo por celda:
 
 ```
-costo = 1 + 6·(1 − p)² + 3·penalización_pendiente²
+costo = 1 + 4·(1 − p)² + 3·penalización_pendiente²
 ```
 
-Se bloquean las celdas con pendiente > 20° o `p` < 0.25, con dos celdas de margen. La ruta se calcula con A* de 8 vecinos y se simplifica con Douglas-Peucker (tolerancia 1.5 celdas).
+Se bloquean las celdas con pendiente > 20°, con dos celdas de margen (89 m). La ruta se calcula con A* de 8 vecinos sobre 1.44 millones de celdas y se simplifica con Douglas-Peucker (tolerancia 1.5 celdas).
+
+El umbral duro de probabilidad es 0: el modelo se entrenó en un corredor de 19 km junto al sitio de aterrizaje y no certifica terreno a 47 km de distancia, así que la probabilidad actúa sobre el costo y el veto duro queda en la pendiente.
 
 ## Resultados
 
 | Métrica | Modelo aprendido | Referencia solo-pendiente |
 |---|---|---|
-| Longitud | 11.89 km | 9.70 km |
-| Pendiente media | 4.7° | 5.2° |
-| Pendiente máxima | 13.9° | 12.8° |
-| Riesgo medio | 0.073 | 0.447 |
-| Transitabilidad mínima | 0.392 | 0.000 |
-| Celdas expandidas | 283 810 | 235 701 |
+| Longitud | 72.0 km | 59.0 km |
+| Pendiente media | 5.6° | 7.5° |
+| Pendiente máxima | 18.0° | 16.6° |
+| Rugosidad media | 8.8 m | 11.8 m |
+| Transitabilidad media | 0.67 | 0.34 |
+| Terreno tipo traverse | 64 % | 21 % |
+| Celdas expandidas | 1 121 787 | 466 324 |
 
-El modelo recorre 2.2 km más que la referencia, pero reduce el riesgo medio 6.1 veces y evita por completo las dunas y los campos de rocas del sureste. El 59 % de la ruta queda a menos de 150 m del recorrido real de Curiosity (mediana 110 m), lo que valida el corredor elegido.
+La ruta aprendida recorre 13 km más que la referencia, pero duplica la transitabilidad media y triplica la fracción de recorrido sobre terreno comparable al que Curiosity ya atravesó. La referencia corta en diagonal por el flanco norte del macizo; la ruta aprendida rodea el montículo por el oeste, cruza el llano al sur del campo de dunas y asciende por la ladera sur hasta la cumbre.
 
 ![Comparación](maps/route_comparison.png)
 
@@ -124,9 +130,10 @@ python scripts\make_maps.py
 
 ## Limitaciones
 
+- El modelo se entrenó con un solo corredor de 19 km; la cumbre está a 47 km y queda fuera de la distribución de entrenamiento, por eso la probabilidad no se usa como veto.
 - Los negativos se muestrean solo en celdas peligrosas, así que el modelo ordena riesgo relativo, no transitabilidad absoluta.
-- La capa espectral es contexto regional: no hay detecciones de minerales hidratados dentro del área.
-- La grilla de 9.9 m no resuelve rocas individuales; el DEM HiRISE de 1 m se usa para calcular pendiente y rugosidad antes de remuestrear.
+- La cobertura espectral CRISM es parcial (6.4 % del área) y las detecciones de minerales hidratados son puntuales.
+- La grilla de 44 m no resuelve rocas ni dunas individuales: el campo de Bagnold se cruza por su borde sur.
 - REMS cubre dos soles, sin representar todas las estaciones marcianas.
 - El costo es estático: no modela el polvo, la visibilidad ni la energía del traje.
 

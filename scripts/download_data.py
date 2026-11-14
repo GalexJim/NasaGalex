@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import math
 import re
 import urllib.parse
 import urllib.request
@@ -17,11 +16,11 @@ ROOT = Path(__file__).resolve().parents[1]
 RAW = ROOT / "data" / "raw"
 CACHE = ROOT / "data" / "cache"
 
-BBOX = (137.35, -4.77, 137.55, -4.57)
-REGION_BBOX = (136.9, -5.1, 138.0, -3.9)
-DEM_SIZE = 2400
-OPTICAL_SIZE = 4096
-CONTEXT_SIZE = 1200
+BBOX = (137.18, -5.45, 138.08, -4.55)
+REGION_BBOX = (136.60, -6.10, 138.90, -3.90)
+DEM_SIZE = 1200
+OPTICAL_SIZE = 1200
+CONTEXT_SIZE = 1400
 
 TREK = "https://trek.nasa.gov/mars/trekarcgis/rest/services"
 REMS_BASE = "https://atmos.nmsu.edu/PDS/data/mslrem_1001/DATA"
@@ -80,7 +79,9 @@ def write_geotiff(path: Path, array: np.ndarray, bbox=BBOX) -> None:
 
 
 def download_dem() -> None:
-    payload = export_image("Gale_DEM_SMG_1m", DEM_SIZE, "tiff", "F32")
+    payload = export_image(
+        "Mars_MOLA_blend200ppx_HRSC_DEM_clon0dd_200mpp_lzw", DEM_SIZE, "tiff", "F32"
+    )
     tmp = CACHE / "dem_export.tif"
     tmp.parent.mkdir(parents=True, exist_ok=True)
     tmp.write_bytes(payload)
@@ -91,25 +92,27 @@ def download_dem() -> None:
 
 
 def download_optical() -> None:
-    payload = export_image("curiosity_hirise_mosaic", OPTICAL_SIZE, "jpg", "U8")
-    (RAW / "gale_hirise.jpg").write_bytes(payload)
+    payload = export_image(
+        "Mars_MOLA_blend200ppx_HRSC_ClrShade_clon0dd_200mpp", OPTICAL_SIZE, "jpg", "U8"
+    )
+    (RAW / "gale_optical.jpg").write_bytes(payload)
 
 
 def download_context() -> None:
-    payload = export_image("Mars_MOLA_blend200ppx_HRSC_ClrShade_clon0dd_200mpp", CONTEXT_SIZE, "jpg", "U8")
-    (RAW / "gale_context.jpg").write_bytes(payload)
-    regional = export_image(
-        "Mars_Viking_MDIM21_ClrMosaic_global_232m",
-        1400,
+    payload = export_image(
+        "Mars_MOLA_blend200ppx_HRSC_ClrShade_clon0dd_200mpp",
+        CONTEXT_SIZE,
         "jpg",
         "U8",
         bbox=REGION_BBOX,
     )
-    (RAW / "gale_region.jpg").write_bytes(regional)
+    (RAW / "gale_context.jpg").write_bytes(payload)
 
 
 def download_viking() -> None:
-    payload = export_image("Mars_Viking_MDIM21_ClrMosaic_global_232m", CONTEXT_SIZE, "tiff", "U8")
+    payload = export_image(
+        "Mars_Viking_MDIM21_ClrMosaic_global_232m", OPTICAL_SIZE, "tiff", "U8"
+    )
     tmp = CACHE / "viking.tif"
     tmp.parent.mkdir(parents=True, exist_ok=True)
     tmp.write_bytes(payload)
@@ -157,10 +160,10 @@ def download_traverse() -> None:
     )
 
 
-def download_minerals() -> None:
+def query_features(service: str, bbox, layer: int = 0) -> list[dict]:
     params = urllib.parse.urlencode(
         {
-            "geometry": "136.8,-5.4,138.0,-3.8",
+            "geometry": f"{bbox[0]},{bbox[1]},{bbox[2]},{bbox[3]}",
             "geometryType": "esriGeometryEnvelope",
             "inSR": "104905",
             "spatialRel": "esriSpatialRelIntersects",
@@ -170,11 +173,15 @@ def download_minerals() -> None:
             "f": "json",
         }
     )
-    payload = json.loads(
-        fetch(f"{TREK}/Hydrous_Mineral_Detections_OMEGA_CRISM_clon0/MapServer/0/query?{params}")
-    )
+    payload = json.loads(fetch(f"{TREK}/{service}/MapServer/{layer}/query?{params}"))
+    return payload.get("features", [])
+
+
+def download_minerals() -> None:
     features = []
-    for feature in payload.get("features", []):
+    for feature in query_features(
+        "Hydrous_Mineral_Detections_OMEGA_CRISM_clon0", (136.8, -5.6, 138.4, -4.2)
+    ):
         attributes = feature["attributes"]
         features.append(
             {
@@ -186,6 +193,24 @@ def download_minerals() -> None:
         )
     (RAW / "hydrous_minerals.json").write_text(
         json.dumps({"features": features}, indent=1), encoding="utf-8"
+    )
+
+    crism = []
+    for feature in query_features("mars_mro_crism_mtrdr_c0a_humex_frt_sites", BBOX):
+        attributes = feature["attributes"]
+        crism.append(
+            {
+                "product_id": attributes["ProductId"],
+                "west": attributes["WestLon"],
+                "south": attributes["MinLat"],
+                "east": attributes["EastLon"],
+                "north": attributes["MaxLat"],
+                "instrument": attributes["InstId"],
+                "start": attributes["UTCstart"],
+            }
+        )
+    (RAW / "crism_sites.json").write_text(
+        json.dumps({"features": crism}, indent=1), encoding="utf-8"
     )
 
 
@@ -234,8 +259,9 @@ def main() -> None:
     print("REMS")
     download_rems()
     meta = {
-        "site": "Gale Crater - Aeolis Mons north flank",
+        "site": "Mount Sharp (Aeolis Mons), Gale Crater",
         "bbox": list(BBOX),
+        "region_bbox": list(REGION_BBOX),
         "crs": "Mars 2000 planetocentric (EPSG:104905)",
         "dem_size": DEM_SIZE,
         "optical_size": OPTICAL_SIZE,

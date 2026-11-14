@@ -1,0 +1,22 @@
+{
+ "features": [
+  {
+   "product_id": "FRT0000A091_07_IF165J_MTR3",
+   "west": 137.338,
+   "south": -5.295,
+   "east": 137.571,
+   "north": -5.079,
+   "instrument": "CRISM",
+   "start": "2008-02-20T15:35:14.126"
+  },
+  {
+   "product_id": "FRT000045F2_07_IF165J_MTR3",
+   "west": 136.945,
+   "south": -5.133,
+   "east": 137.186,
+   "north": -4.908,
+   "instrument": "CRISM",
+   "start": "2007-02-20T21:16:54.928"
+  }
+ ]
+}
