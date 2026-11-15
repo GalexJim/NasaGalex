@@ -47,7 +47,9 @@
 
   <details>
     <summary>Fuentes de datos (avanzado)</summary>
-    <label>Capa de altitud (DEM, escala de grises)</label>
+    <label>Carpeta local de teselas DEM (generada con tile_dem.py; vacío = usar NASA)</label>
+    <input id="localDem" type="text" value="3dView/dem_tiles">
+    <label>Capa de altitud remota (DEM, escala de grises)</label>
     <input id="demLayer" type="text" value="mola128_mola64_merge_90Nto90S_SimpleC_clon0">
     <label>Extensión del DEM (si falla una, prueba la otra automáticamente)</label>
     <select id="demExt"><option value="png">png</option><option value="jpg">jpg</option></select>
@@ -60,7 +62,7 @@
     <button type="button" id="btnViking" style="flex:1">Color Real (Viking)</button>
     <button type="button" id="btnMola" style="flex:1">Altimetría MOLA</button>
   </div>
-  <input id="colLayer" type="text" value="Mars_Viking_MDIM21_ClrMosaic_global_232m">
+  <input id="colLayer" type="text" value="Mars_MGS_MOLA_ClrShade_merge_global_463m">
     <label>Zoom máximo de teselas</label>
     <input id="maxZ" type="text" value="6">
     <label>Proxy CORS (opcional, prefijo de URL)</label>
@@ -100,6 +102,7 @@ function readCfg() {
     proxy: $('proxy').value.trim(),
     exag: parseFloat($('exag').value),
     demExt: $('demExt').value,
+    local: $('localDem') ? $('localDem').value.trim().replace(/\/+$/, '') : '',
     hmin: parseFloat($('hmin').value),
     hmax: parseFloat($('hmax').value),
   };
@@ -191,12 +194,21 @@ async function buildTile(z, r, c) {
   const td = tileDeg(z);
   const lon0 = -180 + c * td, lat1 = 90 - r * td;
 
-  const [demImg, colImg] = await Promise.all([
-    loadImage(tileURL(cfg.dem, z, r, c, cfg.demExt))
-      .catch(() => loadImage(tileURL(cfg.dem, z, r, c, cfg.demExt === 'png' ? 'jpg' : 'png')))
-      .catch(() => null),
+  const loadDem = async () => {
+    if (cfg.local) {
+      try { return { img: await loadImage(`${cfg.local}/${z}/${r}/${c}.png`), terr: true }; } catch (e) {}
+      try { return { img: await loadImage(`3dView/${cfg.local}/${z}/${r}/${c}.png`), terr: true }; } catch (e) {}
+    }
+    try { return { img: await loadImage(tileURL(cfg.dem, z, r, c, cfg.demExt)), terr: false }; } catch (e) {}
+    try { return { img: await loadImage(tileURL(cfg.dem, z, r, c, cfg.demExt === 'png' ? 'jpg' : 'png')), terr: false }; } catch (e) {}
+    return null;
+  };
+  const [demRes, colImg] = await Promise.all([
+    loadDem(),
     loadImage(tileURL(cfg.col, z, r, c, 'jpg')).catch(() => null),
   ]);
+  const demImg = demRes && demRes.img;
+  const terr = !!(demRes && demRes.terr);
 
   // Leer píxeles del DEM (requiere CORS)
   let pix = null;
@@ -222,17 +234,25 @@ async function buildTile(z, r, c) {
     for (let j = 0; j < n; j++) {
       const u = j / SEGS, v = i / SEGS;
       const lon = lon0 + u * td, lat = lat1 - v * td;
-      let t; // 0..1 normalizado
+      let t, meters; // t: 0..1 normalizado
       if (pix) {
         const px = Math.min(pix.width - 1, Math.round(u * (pix.width - 1)));
         const py = Math.min(pix.height - 1, Math.round(v * (pix.height - 1)));
-        t = pix.data[(py * pix.width + px) * 4] / 255;
+        const o = (py * pix.width + px) * 4;
+        if (terr) { // PNG Terrarium generado por tile_dem.py: metros exactos
+          meters = pix.data[o] * 256 + pix.data[o + 1] + pix.data[o + 2] / 256 - 32768;
+          t = Math.min(1, Math.max(0, (meters - cfg.hmin) / (cfg.hmax - cfg.hmin)));
+        } else { // DEM de la NASA en escala de grises
+          t = pix.data[o] / 255;
+          meters = cfg.hmin + t * (cfg.hmax - cfg.hmin);
+        }
       } else {
         t = Math.min(1, Math.max(0, fbm(lon, lat) * 1.3 - 0.1));
+        meters = cfg.hmin + t * (cfg.hmax - cfg.hmin);
       }
-      const meters = cfg.hmin + t * (cfg.hmax - cfg.hmin);
       const p = (i * n + j) * 3;
-      pos[p] = lon; pos[p + 1] = meters * k; pos[p + 2] = -lat;
+      // Las teselas gruesas se bajan para que nunca tapen a las de más detalle
+      pos[p] = lon; pos[p + 1] = meters * k - (cfg.maxZ - z) * 0.1 * cfg.exag; pos[p + 2] = -lat;
       uvs[(i * n + j) * 2] = u; uvs[(i * n + j) * 2 + 1] = 1 - v;
       const col = ramp(t);
       colors[p] = col[0]; colors[p + 1] = col[1]; colors[p + 2] = col[2];

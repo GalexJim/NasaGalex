@@ -268,11 +268,15 @@ class Handler(BaseHTTPRequestHandler):
             except ValueError as exc:
                 return self._json(400, {"error": str(exc)})
             return self._json(404, {"error": "ruta de API desconocida"})
-        # archivos estáticos (sin salir de web/)
+        # archivos estáticos (web/ o 3dView/ o mars-terreno-3d.html)
         rel = url.path.lstrip("/") or "index.html"
         target = (WEB / rel).resolve()
-        if (WEB.resolve() not in target.parents) or not target.is_file():
-            return self._send(404, b"No encontrado", "text/plain; charset=utf-8")
+        if not (WEB.resolve() in target.parents and target.is_file()):
+            alt_target = (ROOT / rel).resolve()
+            if (rel.startswith("3dView/") or rel == "mars-terreno-3d.html") and ROOT.resolve() in alt_target.parents and alt_target.is_file():
+                target = alt_target
+            else:
+                return self._send(404, b"No encontrado", "text/plain; charset=utf-8")
         ctype = mimetypes.guess_type(target.name)[0] or "application/octet-stream"
         if ctype.startswith("text/") or ctype in ("application/javascript", "application/json"):
             ctype += "; charset=utf-8"

@@ -88,6 +88,7 @@
   <div class="viewswitch" role="radiogroup" aria-label="Vista del mapa">
     <button role="radio" aria-checked="true" data-view="2d">Mapa 2D</button>
     <button role="radio" aria-checked="false" data-view="3d">Relieve 3D</button>
+    <a href="/mars-terreno-3d.html" target="_blank" class="viewswitch-link" title="Abrir visor planetario 3D global de Marte con teselas DEM locales (MOLA / NASA Mars Trek)">Planeta 3D ↗</a>
   </div>
   <div class="zoom" id="zoomCtl">
     <button aria-label="Acercar" data-zoom="in">+</button>
@@ -98,6 +99,10 @@
   <div class="ctl3d" id="ctl3d" hidden>
     <label>Exageración vertical <input type="range" id="exag" min="1" max="6" step="0.5" value="2.5"><output id="exagOut">2,5×</output></label>
     <label class="check"><input type="checkbox" id="follow3d" checked> Seguir al explorador</label>
+    <a href="/mars-terreno-3d.html" target="_blank" class="btn-global3d" title="Abrir visor planetario 3D global de Marte con teselas DEM locales (MOLA / NASA Mars Trek)">
+      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align:-2px"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+      Planeta Global 3D
+    </a>
   </div>
 
   <!-- ============ IZQUIERDA: capas y filtros ============ -->
