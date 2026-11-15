@@ -12,6 +12,13 @@ Sirve la página web (carpeta web/) y una API JSON pequeña:
   POST /api/misiones               guarda/actualiza una misión
   POST /api/telemetria             guarda una lectura de telemetría
   POST /api/route                  calcula una ruta A* en la grilla completa (44 m)
+  GET  /api/avisos                 avisos compartidos entre exploradores (SQLite)
+  POST /api/avisos                 publica un aviso (hallazgo o alerta) para los demás exploradores
+  POST /api/avisos/retirar         el autor retira un aviso
+  POST /api/avisos/recibido        un explorador confirma que recibió un aviso (solo evento)
+  GET  /api/eventos?tipo=...       eventos del almacén JSONL (aviso_publicado, aviso_recibido, aviso_retirado)
+
+Variable de entorno MARS_DATA_DIR: carpeta de datos alternativa (SQLite + JSONL); sirve para pruebas.
 
 Uso:
   python backend/server.py            -> http://127.0.0.1:8000
@@ -24,6 +31,7 @@ from __future__ import annotations
 import argparse
 import json
 import mimetypes
+import os
 import re
 import sqlite3
 import sys
@@ -35,7 +43,7 @@ from urllib.parse import parse_qs, urlparse
 
 ROOT = Path(__file__).resolve().parents[1]
 WEB = ROOT / "web"
-DATA = ROOT / "backend" / "data"
+DATA = Path(os.environ["MARS_DATA_DIR"]) if os.environ.get("MARS_DATA_DIR") else ROOT / "backend" / "data"
 sys.path.insert(0, str(ROOT / "backend"))
 sys.path.insert(0, str(ROOT / "src"))
 
@@ -133,6 +141,49 @@ def save_telemetria(b):
     if b.get("dosis_msv") is not None:  # dosis EVA acumulada del viaje (modelo simplificado, mSv)
         doc["dosis_msv"] = _num(b.get("dosis_msv"), 0, 1e6)
     docs.insert("telemetria", doc)
+
+
+AVISO_TIPOS = ("hallazgo", "alerta_pendiente", "alerta_radiacion")
+
+
+def save_aviso(b):
+    """Publica un aviso compartido. Es idempotente: reenviar el mismo id no lo duplica ni repite el evento."""
+    tipo = b.get("kind")
+    if tipo not in AVISO_TIPOS:
+        raise ValueError("tipo de aviso inválido")
+    row = (_txt(b.get("id"), 60, True), _crew(b.get("author")), tipo, _txt(b.get("text"), 300, True),
+           _num(b.get("lon"), -180, 180), _num(b.get("lat"), -90, 90), _num(b.get("radiusKm"), 0.05, 20) or 0.3,
+           _txt(b.get("region"), 20) or "gale", _num(b.get("simMin"), 0, 1e7))
+    with DB_LOCK:
+        cur = db.execute("INSERT OR IGNORE INTO aviso (id, autor, tipo, texto, lon, lat, radio_km, region, sol_min)"
+                         " VALUES (?,?,?,?,?,?,?,?,?)", row)
+        db.commit()
+        nuevo = cur.rowcount > 0
+    if nuevo:
+        docs.insert("eventos", {"tipo": "aviso_publicado", "aviso_id": row[0], "autor": row[1], "kind": tipo, "lon": row[4], "lat": row[5]})
+
+
+def retire_aviso(b):
+    aid, autor = _txt(b.get("id"), 60, True), _crew(b.get("crew"))
+    with DB_LOCK:
+        cur = db.execute("UPDATE aviso SET estado = 'retirado' WHERE id = ? AND autor = ? AND estado = 'activo'", (aid, autor))
+        db.commit()
+    if cur.rowcount:
+        docs.insert("eventos", {"tipo": "aviso_retirado", "aviso_id": aid, "autor": autor})
+
+
+def ack_aviso(b):
+    docs.insert("eventos", {"tipo": "aviso_recibido", "aviso_id": _txt(b.get("id"), 60, True), "crew": _crew(b.get("crew"))})
+
+
+def list_avisos(region=None):
+    sql, args = "SELECT * FROM aviso", ()
+    if region:
+        sql, args = sql + " WHERE region = ?", (region,)
+    with DB_LOCK:
+        rows = db.execute(sql + " ORDER BY creado, rowid LIMIT 500", args).fetchall()
+    return [{"id": r["id"], "author": r["autor"], "kind": r["tipo"], "text": r["texto"], "lon": r["lon"], "lat": r["lat"],
+             "radiusKm": r["radio_km"], "region": r["region"], "simMin": r["sol_min"], "estado": r["estado"], "creado": r["creado"]} for r in rows]
 
 
 # ---------------------------------------------------------------- rutas multicriterio
@@ -264,6 +315,11 @@ class Handler(BaseHTTPRequestHandler):
                 if name == "scenario":
                     scen_file = ROOT / "data" / "simulated" / "demo_scenario.json"
                     return self._json(200, json.loads(scen_file.read_text(encoding="utf-8")) if scen_file.exists() else {})
+                if name == "avisos":
+                    return self._json(200, list_avisos(q.get("region")))
+                if name == "eventos":
+                    flt = {"tipo": q["tipo"]} if q.get("tipo") else {}
+                    return self._json(200, [{k: v for k, v in e.items() if not k.startswith("_")} for e in docs.find("eventos", flt, limit=500)])
                 if name == "reportes":
                     reports = storage.list_reports(q.get("author") or q.get("autor"))
                     return self._json(200, [r.to_dict() for r in reports])
@@ -337,7 +393,13 @@ class Handler(BaseHTTPRequestHandler):
                 )
                 storage.save_report(rep)
                 return self._json(201, {"ok": True, "id": rep.id})
-            handlers = {"hallazgos": save_hallazgo, "bitacora": save_mensaje, "misiones": save_mision, "telemetria": save_telemetria}
+            if name == "avisos/retirar":
+                retire_aviso(body)
+                return self._json(200, {"ok": True})
+            if name == "avisos/recibido":
+                ack_aviso(body)
+                return self._json(201, {"ok": True})
+            handlers = {"avisos": save_aviso, "hallazgos": save_hallazgo, "bitacora": save_mensaje, "misiones": save_mision, "telemetria": save_telemetria}
             if name in handlers:
                 handlers[name](body)
                 return self._json(201, {"ok": True})
@@ -355,6 +417,10 @@ def main():
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8000)
     a = ap.parse_args()
+    try:  # la consola de Windows usa cp1252 cuando la salida se redirige y el mensaje lleva "→"
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
     srv = ThreadingHTTPServer((a.host, a.port), Handler)
     print(f"Ruta segura a Mount Sharp → http://{a.host}:{a.port}  (Ctrl+C para salir)")
     try:

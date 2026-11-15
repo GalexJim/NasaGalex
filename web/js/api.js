@@ -59,4 +59,12 @@
   API.sendReporte = async function (rep) {
     return await API.send("reportes", rep);
   };
+  // avisos compartidos entre exploradores (ver shared.js)
+  API.sendAviso = n => API.send("avisos", n);
+  API.retractAviso = (id, crew) => API.send("avisos/retirar", { id, crew });
+  API.ackAviso = (id, crew) => API.send("avisos/recibido", { id, crew });
+  API.getAvisos = async function () {
+    if (!API.online) return null;
+    try { return await req("avisos"); } catch (e) { return null; }
+  };
 })();

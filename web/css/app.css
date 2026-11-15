@@ -1958,3 +1958,10 @@ html.reduce *, html.reduce *::before, html.reduce *::after { animation: none !im
 .sol-box summary { cursor: pointer; margin-top: 6px; color: var(--accent); font-weight: 500; }
 .sol-box .explain { margin: 6px 0 0; padding-left: 18px; color: var(--text-2); }
 .sol-box .explain li { margin-bottom: 4px; }
+
+/* ---------- avisos compartidos entre exploradores ---------- */
+.mk[data-t="aviso"] .dot { color: var(--c, var(--caution)); border-style: dashed; border-width: 2.5px; }
+.r-zone { fill: color-mix(in srgb, var(--c, #F0963C) 14%, transparent); stroke: var(--c, #F0963C); stroke-width: 1.8; stroke-dasharray: 6 4; pointer-events: none; }
+.msg.peer { background: color-mix(in srgb, var(--secondary) 12%, var(--panel)); border-left: 3px solid var(--secondary); align-self: flex-start; }
+.f-item.peer .thumb { color: var(--caution); }
+.peer-head { margin: 16px 0 6px; font-size: 12px; font-weight: 600; color: var(--text-2); text-transform: uppercase; letter-spacing: .04em; }

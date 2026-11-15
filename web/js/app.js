@@ -34,7 +34,7 @@
       unread: { misiones: 1, bitacora: 0, hallazgos: 0 }, briefed: false, wx: null, lastWx: -1e9,
       lastTele: -1e9, flags: {}, alerts: 0, detours: 0, hazards: [], lows: [], stops: [], measure: null,
       // radiación (modelo simplificado): dosis EVA acumulada, por sol, y evento solar activo si lo hay
-      rad: { total: 0, bySol: {}, spe: null, crit: {}, flags: {} }, returning: null,
+      rad: { total: 0, bySol: {}, spe: null, crit: {}, flags: {} }, returning: null, sharedSeen: {},
     };
   }
   const trips = {}; CREW.forEach(c => (trips[c.id] = newTrip(c)));
@@ -120,7 +120,8 @@
     const initModal = urlParams.get("modal");
     const initTab = urlParams.get("tab");
     if (initTab === "atm" || initTab === "ter" || initTab === "mod" || initTab === "rad") dashTab = initTab;
-    MR.API.init();
+    MR.Shared.onChange(deliverShared); MR.Shared.load();
+    MR.API.init().then(online => { if (online) MR.Shared.startPolling(); });
     requestAnimationFrame(loop);
     if (initModal === "conditions") {
       openDashboard();
@@ -1048,6 +1049,13 @@
       if (T.measure.a) list.push({ id: "ma", type: "medida", lon: T.measure.a[0], lat: T.measure.a[1], label: "Punto A" });
       if (T.measure.b) list.push({ id: "mb", type: "medida", lon: T.measure.b[0], lat: T.measure.b[1], label: "Punto B" });
     }
+    const zones = [];
+    MR.Shared.visibleFor(T.crew.id, currentRegion).forEach(n => {
+      const a = crewOf(n.author), K = MR.Shared.kinds[n.kind];
+      list.push({ id: n.id, type: "aviso", icon: K.icon, lon: n.lon, lat: n.lat, label: `${a.short} · ${K.label}`, color: a.color, onClick: () => openSharedCard(n) });
+      zones.push({ lon: n.lon, lat: n.lat, radiusKm: n.radiusKm, color: a.color });
+    });
+    MR.Map.drawZones(zones);
     MR.Map.setMarkers(list);
     T.findings.forEach(f => (f.fresh = false));
     if (S.view === "3d" && MR.Scene3D && MR.Scene3D.ready) {
@@ -1160,6 +1168,7 @@
     const f = { id: uid("f"), type, typeName: tn + (note ? " · " + note.slice(0, 24) : ""), note, photo, lon: ll[0], lat: ll[1],
       elev: MR.sample("dem", ll[0], ll[1]), simMin: T.simMin, km: T.km, fresh: true, isNew: true, crew: T.crew.id };
     T.findings.push(f); closePointUI(); refreshMarkers(); bump("hallazgos");
+    f.avisoId = MR.Shared.publish({ kind: "hallazgo", author: T.crew.id, lon: ll[0], lat: ll[1], text: `${tn}${note ? ": " + note : ""}`, simMin: T.simMin, region: currentRegion }).id;
     const msg = sendToEarth(`Hallazgo · ${tn}${note ? ": " + note : ""}`, ll, "hallazgo");
     MR.API.send("hallazgos", { ...f, photo: photo ? "[img]" : null });
     MR.API.sendReporte({
@@ -1176,11 +1185,56 @@
     });
     T.events.push({ t: T.simMin, c: "var(--nominal)", txt: `Hallazgo registrado: ${tn}` });
     toast("Guardado · enviado a la Tierra", "Deshacer", () => {
-      T.findings = T.findings.filter(x => x !== f); T.log = T.log.filter(x => x !== msg);
+      T.findings = T.findings.filter(x => x !== f); T.log = T.log.filter(x => x !== msg); MR.Shared.retract(f.avisoId, T.crew.id);
       bump("hallazgos", -1); refreshMarkers(); renderPanel(); toast("Hallazgo eliminado");
     });
     renderPanel();
   }
+  /* =====================================================
+     AVISOS COMPARTIDOS — lo que un explorador registra, los demás lo ven
+     Cada explorador mantiene su viaje, su reloj y su ruta: el aviso solo se refleja como
+     zona en el mapa y mensaje en la bitácora. Ver web/js/shared.js y docs/COLABORACION.md.
+     ===================================================== */
+  const crewOf = id => CREW.find(c => c.id === id) || { id, short: id, role: "", color: "#F0963C" };
+  // distancia de la ruta de un viaje a la zona del aviso (null si la ruta es de otra región)
+  function sharedDistKm(t, n) {
+    const r = t.route || t.adjusted || t.baseRoute;
+    return r && r.length && currentRegion === (n.region || "gale") ? MR.distToRoute(r, [n.lon, n.lat]) : null;
+  }
+  function deliverShared(res, silent) {
+    res.changed.forEach(n => { if (n.estado === "retirado") Object.values(trips).forEach(t => { t.log = t.log.filter(m => m.aviso !== n.id); }); });
+    res.added.forEach(n => {
+      if (n.estado !== "activo") return;
+      const a = crewOf(n.author), K = MR.Shared.kinds[n.kind];
+      Object.values(trips).forEach(t => {
+        if (t.crew.id === n.author || t.sharedSeen[n.id]) return;
+        t.sharedSeen[n.id] = 1;
+        const d = sharedDistKm(t, n), near = d != null && d < n.radiusKm + 1;
+        const text = `${a.short} · ${K.label}: ${n.text}` + (d != null ? ` · tu ruta pasa a ${fmt(d, 1)} km` : "");
+        t.log.push({ id: uid("l"), from: "peer", text, t: t.simMin, ll: [n.lon, n.lat], aviso: n.id, author: n.author });
+        t.events.push({ t: t.simMin, c: "var(--secondary)", txt: `Aviso de ${a.short}: ${K.label.toLowerCase()}` });
+        if (t === T) {
+          bump("bitacora");
+          if (!silent) banner({ kind: near ? "warn" : "msg", title: `${a.short} · ${K.label}`, sub: n.text + (d != null ? ` · tu ruta pasa a ${fmt(d, 1)} km` : ""),
+            onClick: () => { MR.Map.centerOn(n.lon, n.lat, 2.8); togglePanel("bitacora", "tierra"); }, ttl: 8000 });
+        } else t.unread.bitacora++;
+        if (!silent) MR.Shared.ack(n.id, t.crew.id);
+      });
+    });
+    if (S.panel === "bitacora" || S.panel === "hallazgos") renderPanel();
+    refreshMarkers();
+  }
+  function openSharedCard(n) {
+    const a = crewOf(n.author), K = MR.Shared.kinds[n.kind], d = sharedDistKm(T, n);
+    mini([n.lon, n.lat], `<h4></h4><div class="coords"></div><p class="note" style="margin:8px 0 0;font-size:13px"></p>
+      <div class="actions"><button class="btn ghost" data-x>Cerrar</button></div>`, el => {
+      el.querySelector("h4").textContent = `${K.label} · ${a.short}`;
+      el.querySelector(".coords").textContent = `${MR.fmtLL(n.lon, n.lat)} · ${a.role} · reloj de ${a.short}: ${MR.solTime(n.simMin || 0).label}`;
+      el.querySelector(".note").textContent = n.text + (d != null ? ` Tu ruta pasa a ${fmt(d, 1)} km de esta zona.` : "");
+      el.querySelector("[data-x]").addEventListener("click", closePointUI);
+    });
+  }
+
   function openFindingCard(f) {
     mini([f.lon, f.lat], `<h4></h4><div class="coords">${MR.fmtLL(f.lon, f.lat)} · ${fmt(f.elev, 0)} m · ${MR.solTime(f.simMin).label}</div>
       ${f.photo ? `<img alt="Foto del hallazgo" src="${f.photo}" style="width:100%;border-radius:8px;margin-top:8px">` : ""}
@@ -1420,7 +1474,12 @@
       banner({ kind: "warn", title: "Dosis de radiación al 50 % del umbral", sub: `${fmt(day, 2)} de ${fmt(thr, 1)} mSv hoy · toca para ver detalles`, onClick: openRadiationPanel, ttl: 8000 });
     }
     const lvl = Math.floor(day / thr);
-    if (!T.returning && lvl >= 1 && lvl > (R.crit[sol] || 0)) { R.crit[sol] = lvl; radiationAlert(day); return true; }
+    if (!T.returning && lvl >= 1 && lvl > (R.crit[sol] || 0)) {
+      R.crit[sol] = lvl; const rp = curPos();
+      MR.Shared.publish({ kind: "alerta_radiacion", author: T.crew.id, lon: rp[0], lat: rp[1], simMin: T.simMin, region: currentRegion,
+        text: `dosis EVA de ${fmt(day, 1)} mSv hoy (umbral ${fmt(thr, 1)} mSv)${on ? " con evento solar activo" : ""}` });
+      radiationAlert(day); return true;
+    }
     return false;
   }
   function nearestShelter(p) {
@@ -1480,6 +1539,11 @@
     T.playing = false; renderStatus(); T.alerts++;
     if (S.panel) togglePanel(null);
     $("stageCard").hidden = true;
+    if (!T.flags["sh_" + z.id]) {
+      T.flags["sh_" + z.id] = 1; const zp = posAt(T.route, z.startKm);
+      MR.Shared.publish({ kind: "alerta_pendiente", author: T.crew.id, lon: zp[0], lat: zp[1], simMin: T.simMin, region: currentRegion,
+        text: `pendiente de ${fmt(z.max, 0)}° en un tramo de ${fmt((z.endKm - z.startKm) * 1000 + 50, 0)} m (km ${fmt(z.startKm)})` });
+    }
     const p = curPos(); const dist = Math.max(0, (z.startKm - T.km) * 1000);
     const targetKm = Math.min(T.route[T.route.length - 1][2], z.endKm + 0.9);
     const tp = posAt(T.route, targetKm);
@@ -1860,10 +1924,10 @@
     const items = tab === "asistente" ? T.ai : T.log;
     if (!items.length) box.innerHTML = `<p class="empty">${tab === "asistente" ? "Pregunta por distancia, peligros, clima o tu posición. Responde al instante." : "Aquí llegan los mensajes de la Tierra y se guardan tus reportes. Cada mensaje tarda 12 min en llegar."}</p>`;
     items.forEach(m => {
-      const d = document.createElement("div"); d.className = "msg " + (m.from === "me" ? "me" : m.from === "sys" ? "sys" : "them");
+      const d = document.createElement("div"); d.className = "msg " + (m.from === "me" ? "me" : m.from === "sys" ? "sys" : m.from === "peer" ? "peer" : "them");
       d.appendChild(document.createTextNode(m.text));
       const meta = document.createElement("span"); meta.className = "meta";
-      const who = m.from === "me" ? T.crew.short : m.from === "earth" ? "Tierra" : m.from === "sys" ? "" : "Asistente";
+      const who = m.from === "me" ? T.crew.short : m.from === "earth" ? "Tierra" : m.from === "sys" ? "" : m.from === "peer" ? "Aviso" : "Asistente";
       let st = "";
       if (m.from === "me" && tab === "tierra") st = T.simMin >= m.arrive ? " · ✓ recibido en la Tierra" : ` · enviado → llega ${MR.solTime(m.arrive).hm}`;
       meta.textContent = `${who ? who + " " : ""}${MR.solTime(m.t).hm}${st}`;
@@ -1909,6 +1973,17 @@
       d.querySelector("[data-p]").addEventListener("click", () => openOwnBriefing({ lon: f.lon, lat: f.lat, name: "Muestra: " + f.typeName.slice(0, 40), type: "Muestreo" }));
       box.appendChild(d);
     });
+    const peers = ft === "todos" ? MR.Shared.visibleFor(T.crew.id, currentRegion).filter(n => n.kind === "hallazgo") : [];
+    if (peers.length) {
+      const h = document.createElement("div"); h.className = "peer-head"; h.textContent = `Hallazgos de otros exploradores (${peers.length})`; box.appendChild(h);
+      peers.slice().reverse().forEach(n => {
+        const a = crewOf(n.author), d = document.createElement("div"); d.className = "f-item peer";
+        d.innerHTML = `<div class="thumb">${MR.ICONS.hallazgo}</div><div><b></b><small></small><div class="row-actions"><button class="btn ghost" data-c>Ver</button></div></div>`;
+        d.querySelector("b").textContent = n.text; d.querySelector("small").textContent = `${a.short} · ${a.role} · ${MR.fmtLL(n.lon, n.lat)}`;
+        d.querySelector("[data-c]").addEventListener("click", () => { MR.Map.centerOn(n.lon, n.lat, 3); setTimeout(() => openSharedCard(n), 300); });
+        box.appendChild(d);
+      });
+    }
   }
 
   /* =====================================================
@@ -2382,7 +2457,7 @@
     el.querySelector("[data-log]").addEventListener("click", () => { el.hidden = true; togglePanel("bitacora", "tierra"); });
     el.querySelector("[data-new]").addEventListener("click", () => {
       el.hidden = true;
-      const keep = { findings: T.findings, log: T.log, ai: T.ai };
+      const keep = { findings: T.findings, log: T.log, ai: T.ai, sharedSeen: T.sharedSeen };
       trips[T.crew.id] = T = Object.assign(newTrip(T.crew), keep);
       renderAll(true); MR.Map.fit(); setTimeout(openMainBriefing, 300);
     });

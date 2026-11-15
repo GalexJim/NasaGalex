@@ -199,6 +199,7 @@
       ciencia: 0xb5651d,
       referencia: 0xc0c8d4,
       hallazgo: 0x46c882,
+      aviso: 0xf0963c,
       secundaria: 0xa68bff,
       propuesta: 0xa68bff
     };

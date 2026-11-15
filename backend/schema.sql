@@ -61,6 +61,23 @@ CREATE TABLE IF NOT EXISTS reporte (
     creado      TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- Avisos compartidos: un hallazgo o una alerta de un explorador que los demás ven en su mapa y su bitácora.
+-- Cada explorador sigue con su viaje separado; esto solo avisa. Los eventos (publicado, recibido, retirado)
+-- van al almacén JSONL (colección "eventos"), no aquí.
+CREATE TABLE IF NOT EXISTS aviso (
+    id          TEXT PRIMARY KEY,
+    autor       TEXT NOT NULL REFERENCES explorador(id),
+    tipo        TEXT NOT NULL CHECK (tipo IN ('hallazgo', 'alerta_pendiente', 'alerta_radiacion')),
+    texto       TEXT NOT NULL,
+    lon         REAL NOT NULL, lat REAL NOT NULL,
+    radio_km    REAL NOT NULL DEFAULT 0.3,       -- tamaño de la zona dibujada en el mapa
+    region      TEXT NOT NULL DEFAULT 'gale',
+    sol_min     REAL,                            -- reloj del autor (cada viaje tiene el suyo)
+    estado      TEXT NOT NULL DEFAULT 'activo' CHECK (estado IN ('activo', 'retirado')),
+    creado      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS ix_aviso_autor ON aviso(autor);
+
 CREATE INDEX IF NOT EXISTS ix_hallazgo_exp ON hallazgo(explorador);
 CREATE INDEX IF NOT EXISTS ix_mensaje_exp ON mensaje(explorador);
 CREATE INDEX IF NOT EXISTS ix_mision_exp ON mision(explorador);

@@ -32,7 +32,7 @@
 
   M.init = function () {
     mapEl = $("map"); worldEl = $("world"); markersEl = $("markers"); svg = $("vector");
-    ["crism", "trav", "short", "shorthz", "main", "done", "sec", "hz", "measure"].forEach(k => {
+    ["crism", "trav", "zones", "short", "shorthz", "main", "done", "sec", "hz", "measure"].forEach(k => {
       groups[k] = document.createElementNS(NS, "g"); svg.appendChild(groups[k]);
     });
     // contornos y capa de análisis
@@ -256,6 +256,17 @@
   M.drawSecondary = function (list) {
     M.clear("sec"); (list || []).forEach(pts => pts && pts.length > 1 && put("sec", "r-sec", d(pts)));
   };
+  // zonas de aviso de otros exploradores: círculo discontinuo del color del autor (radio en km)
+  M.drawZones = function (list) {
+    M.clear("zones"); if (!list || !list.length) return;
+    const b = MR.bbox, mid = (b[1] + b[3]) / 2, unitsPerKm = 1200 / MR.distKm([b[0], mid], [b[2], mid]);
+    list.forEach(z => {
+      const [x, y] = MR.toWorld(z.lon, z.lat), c = document.createElementNS(NS, "circle");
+      c.setAttribute("cx", x); c.setAttribute("cy", y); c.setAttribute("r", z.radiusKm * unitsPerKm);
+      c.setAttribute("class", "r-zone"); c.setAttribute("vector-effect", "non-scaling-stroke"); c.style.setProperty("--c", z.color || "#F0963C");
+      groups.zones.appendChild(c);
+    });
+  };
   M.drawMeasure = function (a, b) {
     M.clear("measure"); if (a && b) put("measure", "r-measure", d([a, b]));
   };
@@ -267,7 +278,7 @@
     list.forEach(m => {
       const b = document.createElement("button");
       b.className = "mk" + (m.cls ? " " + m.cls : ""); b.dataset.t = m.type; b.type = "button";
-      b.setAttribute("aria-label", m.label);
+      b.setAttribute("aria-label", m.label); if (m.color) b.style.setProperty("--c", m.color);
       if (m.type === "propuesta") b.innerHTML = `<span class="chip">${MR.ICONS.secundaria}<span></span></span>`;
       else b.innerHTML = `<span class="dot">${MR.ICONS[m.icon || m.type] || MR.ICONS.info}</span><span class="tag"></span>`;
       (b.querySelector(".tag") || b.querySelector(".chip span")).textContent = m.label;
