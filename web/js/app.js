@@ -2130,7 +2130,25 @@
       if (MR.Globe3D && MR.Globe3D.ready) MR.Globe3D.stop();
     }
   }
-  function sync3dTexture() { if (MR.Scene3D.ready) MR.Scene3D.setTexture($("basemap"), S.layer !== "none" ? $("overlay") : null, S.opacity); }
+  // Mapa base para el relieve 3D: copia como data: URI (data/basemaps_data.js, carga bajo demanda). Por file:// el <img> del
+  // mapa 2D no sirve como textura WebGL porque el navegador lo marca como contaminado y el terreno saldría negro.
+  const bm3d = {};
+  MR.basemap3d = function () {
+    const m = /basemap_[a-z_]+/.exec($("basemap").getAttribute("src") || ""), uri = m && window.MARS_BASEMAPS && window.MARS_BASEMAPS[m[0]];
+    if (!uri) return null;
+    if (!bm3d[m[0]]) { const im = new Image(); im.onload = () => sync3dTexture(); im.src = uri; bm3d[m[0]] = im; }
+    return bm3d[m[0]].complete ? bm3d[m[0]] : null;
+  };
+  let bmLoading = false;
+  function sync3dTexture() {
+    if (!MR.Scene3D.ready) return;
+    if (!window.MARS_BASEMAPS) {
+      if (!bmLoading) { bmLoading = true; const sc = document.createElement("script"); sc.src = "data/basemaps_data.js"; sc.onload = () => sync3dTexture(); document.head.appendChild(sc); }
+      return;
+    }
+    const im = MR.basemap3d(); if (!im) return; // aún decodificando: su onload vuelve a llamar
+    MR.Scene3D.setTexture(im, S.layer !== "none" ? $("overlay") : null, S.opacity);
+  }
   function update3d() {
     const pins = [];
     filteredObjectives().forEach(o => pins.push({ type: o.type, lon: o.lon, lat: o.lat, label: o.name, onClick: () => openObjective(o) }));

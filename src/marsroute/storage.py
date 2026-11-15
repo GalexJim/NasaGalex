@@ -86,6 +86,17 @@ INSERT OR IGNORE INTO explorador (id, rol, color) VALUES
 """
 
 
+class _ClosingConnection(sqlite3.Connection):
+    """`with sqlite3.connect(...)` confirma o revierte pero NO cierra la conexión: cada llamada dejaba una abierta
+    (en Windows eso impide borrar el archivo). Esta variante también la cierra al salir del bloque `with`."""
+
+    def __exit__(self, exc_type, exc, tb):
+        try:
+            return super().__exit__(exc_type, exc, tb)
+        finally:
+            self.close()
+
+
 class Storage:
     """Administrador de persistencia SQLite hilo-seguro para el prototipo."""
 
@@ -96,7 +107,7 @@ class Storage:
         self._init_db()
 
     def _get_connection(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(str(self.db_path), check_same_thread=False)
+        conn = sqlite3.connect(str(self.db_path), check_same_thread=False, factory=_ClosingConnection)
         conn.row_factory = sqlite3.Row
         return conn
 

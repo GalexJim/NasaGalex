@@ -279,7 +279,7 @@ def main() -> int:
         scenario_a(browser)
         scenario_a2(browser)
         scenario_b(browser)
-        errs = [e for e in ERRORS if not any(i in e for i in ("WebGL", "GPU stall", "GL Driver"))]
+        errs = [e for e in ERRORS if not any(i in e for i in ("GPU stall", "GL Driver"))]
         check("sin errores en consola", not errs, "; ".join(errs)[:400])
         browser.close()
     failed = [c for c in CHECKS if not c[1]]

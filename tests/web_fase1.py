@@ -128,7 +128,7 @@ def main() -> int:
         pg.evaluate("() => document.querySelector('[data-view=\"2d\"]').click()")
         pg.wait_for_timeout(300)
 
-        ignorable = ("WebGL", "GPU stall", "GL Driver Message")
+        ignorable = ("GPU stall", "GL Driver Message")
         errs = [e for e in ERRORS if not any(i in e for i in ignorable)]
         check("sin errores en consola", not errs, "; ".join(errs)[:400])
         browser.close()

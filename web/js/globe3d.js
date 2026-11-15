@@ -230,8 +230,22 @@
     return `/api/proxy/trek?layer=${encodeURIComponent(layerId)}&z=${z}&r=${r}&c=${c}&ext=${ext}`;
   }
 
+  // Por file:// (doble clic) no hay proxy local ni archivos de teselas legibles (CORS): se evita intentarlos y se
+  // pide cada tesela directo a NASA Trek; si no hay internet, queda el relieve procedural de contingencia.
+  const SIN_SERVIDOR = location.protocol === "file:";
   function loadImageCached(url) {
     if (imageCache.has(url)) return Promise.resolve(imageCache.get(url));
+    if (SIN_SERVIDOR) {
+      // Sin servidor no existen ni el proxy ni los archivos locales: se salta directo a NASA Trek (si hay internet).
+      const m = /^\/api\/proxy\/trek\?layer=([^&]+)&z=(\d+)&r=(\d+)&c=(\d+)&ext=(\w+)/.exec(url);
+      if (!m) return Promise.reject(new Error("sin servidor: archivo local no disponible"));
+      return new Promise((resolve, reject) => {
+        const img = new Image(); img.crossOrigin = "anonymous";
+        img.onload = () => { imageCache.set(url, img); resolve(img); };
+        img.onerror = () => reject(new Error("Error cargando tesela: " + url));
+        img.src = `${BASE_URL}/${decodeURIComponent(m[1])}/1.0.0/default/default028mm/${m[2]}/${m[3]}/${m[4]}.${m[5]}`;
+      });
+    }
     return new Promise((resolve, reject) => {
       const img = new Image();
       img.crossOrigin = "anonymous";

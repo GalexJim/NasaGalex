@@ -192,12 +192,22 @@ def test_demo_scenario_structure():
     assert has_critical, "El escenario debe incluir al menos un evento crítico para disparar alerta"
 
 
-def test_server_modules_importable():
-    """Verifica que el servidor backend cargue sin errores con las nuevas rutas y módulos."""
+def test_server_modules_importable(tmp_path, monkeypatch):
+    """Verifica que el servidor backend cargue sin errores con las nuevas rutas y módulos.
+
+    Usa una carpeta de datos temporal: importar el servidor abre y migra la base SQLite, y no debe tocar la versionada.
+    """
+    monkeypatch.setenv("MARS_DATA_DIR", str(tmp_path))
     sys.path.insert(0, str(ROOT / "backend"))
+    sys.modules.pop("server", None)
     import server  # noqa: F401
 
-    assert hasattr(server, "Handler")
+    try:
+        assert hasattr(server, "Handler")
+        assert hasattr(server, "save_aviso")
+    finally:
+        server.db.close()
+        sys.modules.pop("server", None)
     assert hasattr(server, "storage")
 
 

@@ -70,7 +70,7 @@ def main() -> int:
         na = pg.evaluate("() => document.querySelector('.layer-opt[data-key=confidence]').classList.contains('layer-na')")
         check("en Jezero la capa figura como solo Gale", na)
 
-        errs = [e for e in ERRORS if not any(i in e for i in ("WebGL", "GPU stall", "GL Driver"))]
+        errs = [e for e in ERRORS if not any(i in e for i in ("GPU stall", "GL Driver"))]
         check("sin errores en consola", not errs, "; ".join(errs)[:400])
         browser.close()
 

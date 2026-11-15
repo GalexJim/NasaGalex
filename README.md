@@ -96,19 +96,14 @@ REMS registra el ciclo diurno en dos momentos de la misión: temperatura del air
 
 ## Aplicación Web Interactiva — GaleX
 
-GaleX es una aplicación **100% web, offline-first** con backend Python local para planificación predictiva y simulación EVA interactiva en Marte.
+GaleX es una aplicación **100 % web, offline-first** para planificación predictiva y simulación EVA interactiva en Marte. **Se abre con doble clic en `web/index.html`** (file://), sin servidor: los datos viajan como scripts (`web/data/*.js`), no con `fetch`. El backend Python local es opcional y añade persistencia (SQLite + JSONL), sincronización entre navegadores y la caché de teselas del Planeta 3D.
 
-### Inicio Rápido en un Paso
+### Inicio rápido
 
-- **Linux / macOS:**
-  ```bash
-  ./run_galex.sh
-  ```
-- **Windows:**
-  ```bat
-  run_galex.bat
-  ```
-- **Manual (Cualquier plataforma):**
+- **Sin servidor:** abre `web/index.html` en el navegador. Verás «Modo local» en la barra superior.
+- **Con backend (Linux / macOS):** `./run_galex.sh`
+- **Con backend (Windows):** `run_galex.bat`
+- **Manual:**
   ```bash
   python3 backend/server.py
   # Abre http://127.0.0.1:8000 en tu navegador
@@ -117,65 +112,114 @@ GaleX es una aplicación **100% web, offline-first** con backend Python local pa
 ### Características de GaleX
 
 1. **Multirregión (Gale y Jezero):**
-   - **Cráter Gale (Curiosity / MSL):** Mosaicos de 1200 × 1200 celdas (44 m/celda), Random Forest determinista, 12 capas ráster, refugios Bradbury Landing y Base Mount Sharp.
-   - **Cráter Jezero (Perseverance / Mars 2020):** Bounding box georreferenciado, refugios Octavia Butler Landing y Delta Front, con etiquetado de honestidad científica (`NO DISPONIBLE` en capas no cubiertas localmente).
-2. **Tres Perfiles de Ruta Multicriterio:**
-   - **Segura:** Minimiza riesgo ambiental, pendientes > 15° y exige reserva de oxígeno > 20% al llegar a un refugio verificado.
-   - **Rápida:** Minimiza el tiempo de exposición EVA mediante cinemática de Tobler ($v = 6 \cdot e^{-3.5|grade+0.05|} \cdot 0.55$).
-   - **Científica:** Maximiza visitas a objetivos geológicos (CRISM, minerales hidratados, sedimentos lacustres).
-3. **Restricciones Duras y Soporte Vital:**
-   - Obligatoriedad de refugio presurizado verificado al final del trayecto (rechazo automático si la distancia al refugio > 1.0 km).
-   - Monitoreo en tiempo real de consumo de $O_2$, batería (Rover presurizado vs Traje EVA) y dosis de radiación ionizante acumulada.
-4. **Relieve Planetario 3D (Motor `mars-terreno-3d`):**
-   - Coordenadas planetocéntricas ($X = lon$, $Z = -lat$, $Y = elev \cdot exag / 59200$).
-   - Streaming dinámico de teselas WMTS MOLA de NASA Mars Trek con zoom por niveles de detalle (LOD 0–6).
-   - Modo de contingencia sin conexión: relieve procedural FBM + rampa hipsométrica + muestreo del DEM local de Gale.
-   - Controles cinemáticos `flyTo` para Gale, Jezero, Olympus Mons, Valles Marineris y Vista Global.
-5. **Red Meteorológica MDA y Replanificación:**
-   - Red de estaciones meteorológicas simuladas (`MDA-GALE-01` a `MDA-GALE-22`).
-   - Escenario demostrativo Sol 1 (11:30 LTST): tormenta de viento ($28.4\text{ m/s}$) y opacidad ($\tau = 2.15$) en `MDA-GALE-14` (Bagnold Dunes) con alerta explicable y replanificación en 1 clic.
-6. **Persistencia SQLite y Bilingüe:**
-   - Base de datos relacional `mars_route.sqlite` (`reporte`, `hallazgo`, `mensaje`, `explorador`, `mision`).
-   - Botón de alternancia de idioma Español (ES) / Inglés (EN).
+   - **Cráter Gale (Curiosity / MSL):** grilla de 300 × 300 en el navegador (177 m por celda; 1200 × 1200 y 44 m en el modelo Python), Random Forest determinista, capas ráster, refugios Bradbury Landing y Base Mount Sharp.
+   - **Cráter Jezero (Perseverance / Mars 2020):** bounding box georreferenciado, refugios Octavia Butler Landing y Delta Front, con etiquetado de honestidad científica («SOLO GALE» en las capas no cubiertas localmente).
+2. **Tres perfiles de ruta multicriterio:**
+   - **Segura:** minimiza riesgo ambiental y pendientes > 15°.
+   - **Rápida:** minimiza el tiempo de exposición EVA con la función de Tobler adaptada ($v = 6 \cdot e^{-3.5|grade+0.05|} \cdot 0.55$ km/h).
+   - **Científica:** maximiza visitas a objetivos geológicos (CRISM, minerales hidratados, sedimentos lacustres).
+3. **Radiación como capa de riesgo (modelo simplificado):**
+   - Capa «Radiación» (índice relativo de exposición) e indicador en la barra de condiciones, cada uno con su «?» y su fuente.
+   - Tasa base de MSL-RAD en el piso de Gale (≈ 0,65 mSv/día, Simonsen, NASA 2024), ajustada por altura y por el cielo visible del relieve. Un evento solar de demostración multiplica la tasa.
+   - Dosis EVA acumulada por jornada (solo cuenta las horas al aire libre). Alerta de aviso (50 % del umbral) y crítica (100 %) con **Pausar, Abortar o Volver al refugio**. Umbral configurable en Condiciones → Radiación. La dosis aparece en el resumen final y en el tablero.
+   - Cada parámetro dice si es **fuente** o **supuesto**: no es una medición ni un pronóstico. Detalle en `docs/NOTAS_FUENTES.md`.
+4. **Validación y confianza del modelo de transitabilidad:**
+   - Capa «Confianza del modelo» (desacuerdo entre los 300 árboles del bosque) y fila de confianza en la comparación de rutas.
+   - Condiciones → Modelo predictivo: sección «Limitaciones y supuestos» en lenguaje simple (rover frente a astronauta con traje, sesgos de las etiquetas, extrapolación). Detalle y cifras en `docs/LIMITACIONES_MODELO.md`.
+5. **Jornada EVA configurable y soles honestos:**
+   - Ruta → Jornada EVA: hora de inicio, duración, pausas por hora de marcha y reserva de seguridad. Son **supuestos** (la NASA lista estos parámetros como brechas de conocimiento abiertas).
+   - El briefing muestra cuántos soles toma el recorrido (≈ 5 a pie con los valores por defecto) y explica por qué no son 3. La estimación y la simulación usan la misma velocidad. Detalle en `docs/JORNADA_EVA.md`.
+   - Movilidad por defecto: **a pie con traje**; el rover presurizado sigue disponible.
+6. **Colaboración entre astronautas:**
+   - Un hallazgo o una alerta (pendiente o radiación) de un explorador llega a los otros como zona en el mapa, marcador y mensaje en su bitácora. **Cada uno conserva su viaje separado.**
+   - Persistencia: `localStorage` (dos pestañas se avisan al instante, también por file://) y, con backend, SQLite (tabla `aviso`) más eventos en JSONL. Detalle en `docs/COLABORACION.md`.
+7. **Restricciones duras y soporte vital:** refugio presurizado verificado al final del trayecto (rechazo si la distancia al refugio > 1 km); O₂ y batería a pie medidos **por jornada** (el traje se recarga cada noche: supuesto).
+8. **Relieve planetario 3D:**
+   - **Relieve 3D** del recuadro de estudio, con el mapa base y la capa activa como textura. Funciona por file://: los mapas base viajan como `data:` URI en `web/data/basemaps_data.js` (carga bajo demanda), porque el navegador no deja usar como textura WebGL una imagen leída de un archivo.
+   - **Planeta 3D** (motor `mars-terreno-3d`): teselas MOLA de NASA Mars Trek con zoom por niveles de detalle. Necesita internet o el backend; sin ellos queda el relieve procedural de contingencia. Por file:// la consola puede mostrar bloqueos CORS de las teselas de NASA que no existen.
+9. **Red meteorológica MDA y replanificación:** estaciones simuladas (`MDA-GALE-01` a `MDA-GALE-22`) y escenario demostrativo (tormenta en `MDA-GALE-14`, sol 1, 11:30 LTST) con replanificación en un clic.
+10. **Persistencia SQLite y bilingüe:** `mars_route.sqlite` (`reporte`, `hallazgo`, `mensaje`, `explorador`, `mision`, `aviso`) y alternancia Español / Inglés.
 
-### Pruebas de Humo y Verificación
+### Pruebas
+
+**Python** (backend, modelo y avisos):
 
 ```bash
-python3 -m pytest tests/test_smoke.py
+python scripts/plan_route.py              # una vez: genera outputs/traversability.npy (ignorado por git)
+python -m pytest tests/test_smoke.py tests/test_avisos.py
 ```
-Ejecuta 7 pruebas exhaustivas que validan contratos de dominio, consistencia de configuraciones de Gale y Jezero, perfiles multicriterio, persistencia SQLite, escenario simulado y cálculo de rutas con restricciones de refugio.
+
+**Navegador** (Playwright; abre `web/index.html` por file://, sin servidor, salvo la prueba del backend):
+
+```bash
+pip install playwright                    # usa el Edge/Chrome instalado; no descarga navegadores
+python tests/run_web_tests.py             # todas (≈ 3 min)
+python tests/run_web_tests.py e2e fase4   # solo algunas
+```
+
+| Prueba | Qué comprueba |
+|---|---|
+| `web_fase1.py` | capa e indicador de radiación, alerta crítica, pausar y volver al refugio |
+| `web_fase2.py` | capa de confianza, limitaciones, comparación de rutas |
+| `web_fase3.py` | jornada configurable; la simulación completa coincide con la estimación |
+| `web_fase4.py` | avisos compartidos sin servidor y con backend (SQLite + JSONL) |
+| `web_e2e.py` | recorrido completo: file://, 2D/3D, alerta crítica, hallazgo compartido y resumen |
+
+Todas exigen **cero errores en consola**.
+
+### Datos que se regeneran con scripts
+
+```powershell
+python scripts\build_layers.py        # data/processed/layers.npz (ignorado por git)
+python scripts\export_uncertainty.py  # confianza del modelo → web/data/uncertainty_data.js
+python scripts\export_basemaps.py     # mapas base como data: URI → web/data/basemaps_data.js
+```
+
+### Documentación
+
+| Documento | Contenido |
+|---|---|
+| `docs/NOTAS_FUENTES.md` | qué aporta cada fuente, licencias y tabla de supuestos |
+| `docs/LIMITACIONES_MODELO.md` | rover frente a astronauta, sesgos y confianza del modelo |
+| `docs/JORNADA_EVA.md` | velocidad de caminata, jornada EVA y cuántos soles toma el recorrido |
+| `docs/COLABORACION.md` | avisos compartidos, API, persistencia y límites |
 
 ## Estructura
+
 ```
-config/mission.yaml          parámetros de la misión
-config/regions/              configuraciones regionales (Gale y Jezero)
-config/route_profiles.yaml   perfiles multicriterio y restricciones duras
-data/simulated/              escenario de alertas meteorológicas MDA
-src/marsroute/domain.py      modelos de dominio y contratos de datos
-src/marsroute/multicriteria.py planificador A* multicriterio y recursos
-src/marsroute/storage.py     almacén relacional SQLite
-backend/server.py            servidor HTTP/JSON multihilo
-backend/schema.sql           esquema SQLite (reporte, hallazgo, etc.)
-web/index.html               interfaz web principal
-web/css/app.css              estilos responsivos y accesibles
-web/js/scene3d.js            motor 3D de teselas planetarias MOLA
-web/js/app.js                controlador de interfaz, simulación y alertas
-web/js/core.js               algoritmos de soporte y modelos de velocidad
-tests/test_smoke.py          suite de pruebas de humo
-run_galex.sh / run_galex.bat scripts de inicio en un clic
-```
-scripts/download_data.py     descarga y recorte de capas
-scripts/build_layers.py      construcción de la grilla de capas
-scripts/prepare_rems.py      parseo de REMS a CSV
-scripts/train_model.py       entrenamiento y métricas
-scripts/plan_route.py        costo, A* y evaluación
-scripts/make_maps.py         mapas y resumen ambiental
-src/marsroute/               geometría, capas, modelo, planificador, evaluación
-data/raw/                    datos originales
-data/processed/              capas y CSV procesados
-models/                      modelo entrenado y métricas
-outputs/                     ruta y evaluación en JSON
-maps/                        figuras
+config/mission.yaml            parámetros de la misión
+config/regions/                configuraciones regionales (Gale y Jezero)
+config/route_profiles.yaml     perfiles multicriterio y restricciones duras
+data/simulated/                escenario de alertas meteorológicas MDA
+src/marsroute/                 geometría, capas, modelo, planificador, evaluación, dominio y almacén SQLite
+backend/server.py              servidor HTTP/JSON multihilo (variable MARS_DATA_DIR para otra carpeta de datos)
+backend/schema.sql             esquema SQLite (reporte, hallazgo, aviso, etc.)
+backend/docstore.py            almacén JSONL (telemetría, objetivos, eventos)
+web/index.html                 interfaz web principal
+web/css/app.css                estilos responsivos y accesibles
+web/js/core.js                 datos, geometría, A*, clima, radiación y jornada EVA
+web/js/app.js                  flujo de la expedición, simulación, alertas e interfaz
+web/js/shared.js               avisos compartidos entre exploradores
+web/js/map2d.js, scene3d.js, globe3d.js   mapa 2D, relieve 3D y Planeta 3D
+web/js/api.js, charts.js       cliente del backend y gráficas
+web/data/                      datos como scripts (mars_data.js, uncertainty_data.js, basemaps_data.js…)
+scripts/download_data.py       descarga y recorte de capas
+scripts/build_layers.py        construcción de la grilla de capas
+scripts/prepare_rems.py        parseo de REMS a CSV
+scripts/train_model.py         entrenamiento y métricas
+scripts/plan_route.py          costo, A* y evaluación
+scripts/make_maps.py           mapas y resumen ambiental
+scripts/export_web.py          exporta capas, rutas y objetivos para la web
+scripts/export_uncertainty.py  confianza del modelo (desacuerdo entre árboles)
+scripts/export_basemaps.py     mapas base como data: URI para el relieve 3D
+tests/                         pruebas de Python y de navegador (ver «Pruebas»)
+docs/                          documentación del prototipo
+data/raw/                      datos originales
+data/processed/                capas y CSV procesados
+models/                        modelo entrenado, métricas y resumen de incertidumbre
+outputs/                       ruta y evaluación en JSON
+maps/                          figuras
+run_galex.sh / run_galex.bat   scripts de inicio en un clic
 ```
 
 ## Reproducción
@@ -202,6 +246,9 @@ python scripts\make_maps.py
 - La grilla de 44 m no resuelve rocas ni dunas individuales: el campo de Bagnold se cruza por su borde sur.
 - REMS cubre dos soles, sin representar todas las estaciones marcianas.
 - El costo es estático: no modela el polvo, la visibilidad ni la energía del traje.
+- La transitabilidad se aprendió del recorrido de un rover, no de un astronauta con traje, y el recorrido lo eligió la ciencia, no la facilidad de paso (`docs/LIMITACIONES_MODELO.md`).
+- La radiación, la jornada EVA (08:00–17:00, pausas, reserva) y el consumo del traje son **modelos simplificados con supuestos** rotulados como tales; ninguna cifra de EVA tiene respaldo oficial (`docs/NOTAS_FUENTES.md`, `docs/JORNADA_EVA.md`).
+- No hay identidad ni permisos entre exploradores: cualquier cliente puede publicar un aviso como cualquier astronauta (`docs/COLABORACION.md`).
 
 ## Créditos
 

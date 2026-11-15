@@ -116,7 +116,7 @@ def main() -> int:
         check("nunca se camina fuera de la jornada (08:00–15:00)", not outside, str(outside[:5]))
         check("los soles simulados coinciden con los estimados", done["sols"] == est["solsCeil"], f"simulados {done['sols']}, estimados {est['solsCeil']} ({est['hours']:.1f} h a {est['windowH']:.0f} h por sol)")
 
-        errs = [e for e in ERRORS if not any(i in e for i in ("WebGL", "GPU stall", "GL Driver"))]
+        errs = [e for e in ERRORS if not any(i in e for i in ("GPU stall", "GL Driver"))]
         check("sin errores en consola", not errs, "; ".join(errs)[:400])
         browser.close()
 

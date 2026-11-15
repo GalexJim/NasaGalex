@@ -86,8 +86,9 @@
     }
     geo.computeVertexNormals();
 
-    const baseImg = document.getElementById("basemap");
-    const tex = new THREE.Texture(S3.textureCanvas || baseImg);
+    // El <img> del mapa base viene de un archivo: por file:// WebGL lo rechaza ("tainted canvas"). Se usa la copia data: URI.
+    const blank = document.createElement("canvas"); blank.width = blank.height = 4;
+    const tex = new THREE.Texture(S3.textureCanvas || (MR.basemap3d && MR.basemap3d()) || blank);
     tex.needsUpdate = true;
     tex.anisotropy = 4;
     if (THREE.sRGBEncoding) tex.encoding = THREE.sRGBEncoding;
