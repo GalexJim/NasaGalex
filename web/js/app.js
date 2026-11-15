@@ -96,18 +96,34 @@
     if (window.innerWidth < 820) setLeft(false);
     renderAll();
     const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get("reduce") === "1") document.documentElement.classList.add("reduce");
     const initReg = urlParams.get("region");
     if (initReg === "jezero") {
       const regSel = $("regionSelect");
       if (regSel) regSel.value = "jezero";
       switchRegion("jezero");
     }
+    const initView = urlParams.get("view");
+    if (initView === "globe" || initView === "3d" || initView === "2d") {
+      setView(initView);
+    }
+    const initModal = urlParams.get("modal");
+    const initTab = urlParams.get("tab");
+    if (initTab === "atm" || initTab === "ter" || initTab === "mod") dashTab = initTab;
     MR.API.init();
     requestAnimationFrame(loop);
-    setTimeout(() => {
-      if (!MR.store.get("tourDone", false)) startTour(() => openMainBriefing());
-      else openMainBriefing();
-    }, 450);
+    if (initModal === "conditions") {
+      openDashboard();
+    } else if (initModal === "help") {
+      openHelp();
+    } else if (initModal === "none") {
+      // Omite abrir briefing automáticamente en pruebas
+    } else {
+      setTimeout(() => {
+        if (!MR.store.get("tourDone", false)) startTour(() => openMainBriefing());
+        else openMainBriefing();
+      }, 450);
+    }
   }
 
   /* =====================================================
@@ -651,7 +667,7 @@
     $("btnTheme").addEventListener("click", () => {
       const n = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
       document.documentElement.dataset.theme = n; MR.store.set("theme", n); renderDock(true);
-      if (!$("dashboard").hidden) renderDashboard();
+      if (!$("dashboard").hidden || (modalState && modalState.isDashboard)) renderDashboard();
     });
     $("btnMotion").addEventListener("click", e => {
       const on = !document.documentElement.classList.contains("reduce");
@@ -1797,6 +1813,7 @@
       return;
     }
     S.view = v;
+    document.body.dataset.view = v;
     document.querySelectorAll(".viewswitch button").forEach(b => b.setAttribute("aria-checked", b.dataset.view === v));
     $("map").hidden = v !== "2d";
     $("map3d").hidden = v !== "3d";
@@ -1850,28 +1867,93 @@
   }
 
   /* =====================================================
-     VISTA COMPLETA — Dashboard de condiciones
+     VENTANA CENTRAL — Condiciones ambientales y terreno (Dashboard)
      ===================================================== */
   let dashBack = null, dashTab = "atm", dashVar = "temp", dashSol = null;
   function openDashboard(back) {
-    dashBack = back || null; dashSol = dashSol || T.crew.profile;
+    dashBack = back || null;
+    dashSol = dashSol || T.crew.profile || "sol_100";
+    if (!D.rems || !D.rems[dashSol]) dashSol = "sol_100";
     T.playing = false; renderStatus();
-    $("dashboard").hidden = false; renderDashboard();
-    $("dashboard").querySelector("[data-back]").focus({ preventScroll: true });
+    renderDashboardModal();
   }
-  function closeDashboard() { $("dashboard").hidden = true; MR.hideTip(); const b = dashBack; dashBack = null; b && b(); }
+  function closeDashboard() {
+    closeModal();
+    MR.hideTip();
+    const b = dashBack; dashBack = null; b && b();
+  }
+  function renderDashboardModal() {
+    dashSol = dashSol || T.crew.profile || "sol_100";
+    if (!D.rems || !D.rems[dashSol]) dashSol = "sol_100";
+
+    const html = `<div class="mhead dash-modal-head">
+      <div class="dash-modal-title-group">
+        <h2>
+          <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" style="color:var(--accent);vertical-align:text-bottom;margin-right:6px"><path fill="currentColor" d="M12 2a7 7 0 0 0-7 7c0 2.38 1.19 4.47 3 5.74V17a2 2 0 0 0 2 2h4a2 2 0 0 0 2-2v-2.26c1.81-1.27 3-3.36 3-5.74a7 7 0 0 0-7-7z"/></svg>
+          Condiciones de Misión
+        </h2>
+        <div class="who">Telemetría ambiental y parámetros del terreno · Datos reales NASA PDS / REMS · ${esc(D.site)}</div>
+      </div>
+      <button class="modal-close-corner" id="btnDashClose" aria-label="Cerrar ventana">✕</button>
+    </div>
+    <div class="dash-modal-tabs" role="tablist" aria-label="Secciones de condiciones">
+      <button role="tab" class="dash-tab-btn" data-tab="atm" aria-selected="${dashTab === "atm"}">
+        <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z"/></svg>
+        Atmósfera y Clima
+      </button>
+      <button role="tab" class="dash-tab-btn" data-tab="ter" aria-selected="${dashTab === "ter"}">
+        <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="m14 6-3.75 5 2.85 3.8-1.6 1.2-4.5-6L1 18h22L14 6z"/></svg>
+        Terreno y Rutas
+      </button>
+      <button role="tab" class="dash-tab-btn" data-tab="mod" aria-selected="${dashTab === "mod"}">
+        <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/></svg>
+        Modelo Predictivo
+      </button>
+    </div>
+    <div class="mbody dash-modal-body" id="dashBody"></div>
+    <div class="dash-modal-foot">
+      <span class="dash-foot-hint">Presiona <span class="kbd">Esc</span> o haz clic fuera para volver al mapa</span>
+      <button class="btn primary" id="btnDashDone">Cerrar</button>
+    </div>`;
+
+    showModal(html, {
+      cls: "modal-condiciones",
+      isDashboard: true,
+      onClose: () => {
+        MR.hideTip();
+        const b = dashBack; dashBack = null; b && b();
+      },
+      bind: m => {
+        const btnClose = m.querySelector("#btnDashClose");
+        if (btnClose) btnClose.addEventListener("click", closeDashboard);
+        const btnDone = m.querySelector("#btnDashDone");
+        if (btnDone) btnDone.addEventListener("click", closeDashboard);
+        m.querySelectorAll(".dash-tab-btn").forEach(b => {
+          b.addEventListener("click", () => {
+            dashTab = b.dataset.tab;
+            m.querySelectorAll(".dash-tab-btn").forEach(t => t.setAttribute("aria-selected", t.dataset.tab === dashTab));
+            renderDashboardTabContent();
+          });
+        });
+        renderDashboardTabContent();
+      }
+    });
+  }
+
+  function renderDashboardTabContent() {
+    const body = $("dashBody");
+    if (!body) return;
+    if (dashTab === "atm") dashAtm(body);
+    else if (dashTab === "ter") dashTerrain(body);
+    else dashModel(body);
+  }
+
   function renderDashboard() {
-    const el = $("dashboard");
-    el.innerHTML = `<header class="fv-head"><button class="btn" data-back>↩ Volver</button><div><h2>Condiciones</h2><div class="sub">Datos reales de misiones NASA · ${esc(D.site)}</div></div></header>
-      <div class="fv-body"><div class="fv-tabs" role="tablist">
-        <button role="tab" data-tab="atm" aria-selected="${dashTab === "atm"}">Atmósfera</button>
-        <button role="tab" data-tab="ter" aria-selected="${dashTab === "ter"}">Terreno y rutas</button>
-        <button role="tab" data-tab="mod" aria-selected="${dashTab === "mod"}">Modelo predictivo</button></div>
-        <div id="dashBody"></div></div>`;
-    el.querySelector("[data-back]").addEventListener("click", closeDashboard);
-    el.querySelectorAll("[data-tab]").forEach(b => b.addEventListener("click", () => { dashTab = b.dataset.tab; renderDashboard(); }));
-    const body = el.querySelector("#dashBody");
-    if (dashTab === "atm") dashAtm(body); else if (dashTab === "ter") dashTerrain(body); else dashModel(body);
+    if (modalState && modalState.isDashboard && $("dashBody")) {
+      renderDashboardTabContent();
+    } else {
+      renderDashboardModal();
+    }
   }
   function dashAtm(body) {
     const P = D.rems[dashSol], hrs = P.hours;
