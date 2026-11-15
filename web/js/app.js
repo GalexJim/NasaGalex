@@ -865,6 +865,9 @@
     });
     renderLegend(); renderObjList(); renderStops(); renderProfileMetrics();
   }
+  function selectLayer(key) {
+    S.layer = key; MR.Map.setLayer(S.layer, S.opacity); renderLegend(); sync3dTexture();
+  }
   function renderLegend() {
     const L = MR.LAYERS.find(l => l.key === S.layer);
     document.querySelectorAll(".layer-opt").forEach(b => b.setAttribute("aria-checked", b.dataset.key === S.layer));
@@ -2175,8 +2178,9 @@
     const A = T.mode === "walk" || T.mode === "done" ? T.route : T.adjusted || T.baseRoute;
     const B = T.crew.main === "summit" ? MR.withKm(D.routes.summit_short.points) : T.shortRoute;
     const sa = MR.routeStats(A), sb = B ? MR.routeStats(B) : null;
+    const withConf = sa.meanConf != null;
     const rows = [["Longitud", "length", " km", 1, "min"], ["Horas de caminata (est.)", "hours", " h", 1, "min"], ["Pendiente media", "meanSlope", "°", 1, "min"], ["Pendiente máxima", "maxSlope", "°", 1, "min"],
-      ["Rugosidad media", "meanRough", " m", 1, "min"], ["Facilidad de paso media", "meanTrav", "", 2, "max"], ["Tramos sobre el umbral", "hazards", "", 0, "min"], ["Trayecto con paso difícil", "lowFrac", " %", 0, "min", 100]];
+      ["Rugosidad media", "meanRough", " m", 1, "min"], ["Facilidad de paso media", "meanTrav", "", 2, "max"], ...(withConf ? [["Confianza del modelo (media)", "meanConf", "", 2, "max"]] : []), ["Tramos sobre el umbral", "hazards", "", 0, "min"], ["Trayecto con paso difícil", "lowFrac", " %", 0, "min", 100]];
     const cell = (st, other, r) => { const v = st[r[1]] * (r[5] || 1); const o = other ? other[r[1]] * (r[5] || 1) : null;
       const best = o != null && (r[4] === "min" ? v < o : v > o); return `<td class="${best ? "best" : ""}">${fmt(v, r[3])}${r[2]}</td>`; };
     const ca = MR.slopeClasses(A), cb = B ? MR.slopeClasses(B) : null;
@@ -2251,9 +2255,41 @@
         <li>Ejemplos positivos: celdas a menos de 60 m del camino real de Curiosity (${D.model.metrics.positives}). Negativos: celdas lejanas con pendiente &gt; 15° o textura muy rugosa (${D.model.metrics.negatives}).</li>
         <li>División espacial 70/15/15 a lo largo del recorrido para que el modelo no “haga trampa” viendo zonas vecinas.</li>
         <li>La probabilidad se usa como costo en A*: <span class="num">costo = 1 + ${MR.cfg.riskW}·(1 − p)² + ${MR.cfg.slopeW}·pendiente²</span>; las celdas con pendiente &gt; ${MR.cfg.maxSlope}° se bloquean.</li></ul></div>`;
+    body.insertAdjacentHTML("beforeend", modelLimitsHtml(M));
+    const bl = $("btnConfLayer");
+    if (bl) bl.addEventListener("click", () => { closeDashboard(); selectLayer("confidence"); toast("Capa «Confianza del modelo» activa"); });
     MR.barH($("fiBars"), Object.entries(FI).sort((a, b) => b[1] - a[1]).map(([k, v]) => ({ label: names[k], value: v, text: fmt(v * 100, 0) + " %", color: css("--accent") })), { max: 0.5, labelW: 140 });
   }
   const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+
+  // Confianza y "Limitaciones y supuestos" del modelo de transitabilidad, en lenguaje simple.
+  // Cada punto dice de dónde sale: una fuente citada, un dato del repo o un supuesto propio.
+  function modelLimitsHtml(M) {
+    const X = MR.EXTRA && MR.EXTRA.summary, tag = (k, t) => `<span class="tag-${k === "sup" ? "sup" : "src"}">${t}</span>`;
+    const B = X && X.por_distancia_al_recorrido, near = B && B["a menos de 1 km del recorrido"], far = B && B["a más de 10 km"];
+    const rt = X && X.rutas, rA = rt && (T.crew.main === "summit" ? rt.summit : rt[T.crew.main]), rB = rt && rt.summit_short;
+    const f2 = v => fmt(v, 2);
+    const conf = X ? `<div class="card" style="margin-top:16px"><h3>Confianza del modelo</h3>
+      <p class="desc">Preguntamos lo mismo a cada uno de los ${X.arboles} árboles del bosque. Si coinciden, la confianza es alta; si se contradicen, baja. Se ve en el mapa (Capas → Confianza del modelo).</p>
+      <div class="grid-3">
+        <div class="card"><div class="kpi"><span class="v num">${rA ? f2(rA.confianza_media) : "—"}</span><span class="k">Confianza media en la ruta del modelo${rB && T.crew.main === "summit" ? ` (ruta corta: ${f2(rB.confianza_media)})` : ""}</span></div></div>
+        <div class="card"><div class="kpi"><span class="v num">${fmt(X.celdas_confianza_baja_pct, 0)} %</span><span class="k">Del área con confianza baja (menos de 0,5)</span></div></div>
+        <div class="card"><div class="kpi"><span class="v num">${fmt(X.fuera_de_rango_entrenamiento_pct, 0)} %</span><span class="k">Del área con valores que el modelo no vio al entrenar</span></div></div></div>
+      <p class="desc" style="margin-top:10px"><b>Cuidado:</b> que los árboles coincidan no significa que acierten. ${near && far ? `Cerca del recorrido de Curiosity la confianza media es ${f2(near.confianza_media)} y a más de 10 km es ${f2(far.confianza_media)}: casi no baja, aunque ahí el modelo extrapola.` : ""} Úsala para ver dónde el modelo duda, no como garantía.</p>
+      <button class="btn" id="btnConfLayer">Ver en el mapa</button></div>` : "";
+    const li = [
+      [tag("sup", "SUPUESTO"), "<b>El rover no camina como un astronauta.</b> Curiosity tiene ruedas; una persona con traje camina y se cansa. Las pendientes, las rocas sueltas y la arena que frenan a uno no frenan igual al otro. Es razonamiento propio, no un resultado de las fuentes."],
+      [tag("src", "FUENTE · Bennett 2023"), "<b>El rover siguió a la ciencia, no al camino más fácil.</b> Los científicos eligieron por dónde pasar según sus preguntas geológicas. Que el rover pasara por un sitio no significa que sea lo más fácil, ni lo único transitable."],
+      [tag("src", "FUENTE · Bennett 2023"), "<b>El rover subió 32° y rodeó la arena.</b> Llegó a una inclinación de 32° en un escarpe y dio la vuelta a un campo de rizaduras de arena. Nuestro veto de 20° es una decisión de diseño (otra escala: celdas de 44 m, no la inclinación del rover). Y el modelo no tiene una clase «arena»."],
+      [tag("src", "DATO DEL REPO"), `<b>Los ejemplos «malos» son elegidos.</b> Como solo se conoce el camino del rover, las celdas negativas se toman lejos de él y solo si son empinadas o rugosas. Por eso el modelo ordena riesgo relativo; no certifica que un terreno sea seguro.`],
+      [tag("src", "DATO DEL REPO"), `<b>Aprendió en un solo corredor de 19 km</b> cerca del aterrizaje; la cima está a unos 47 km.${X ? ` El ${fmt(X.fuera_de_rango_entrenamiento_pct, 0)} % del área tiene valores fuera de lo que vio.` : ""}`],
+      [tag("src", "DATO DEL REPO"), "<b>No ve rocas ni dunas sueltas</b> (celdas de 44 m; el navegador usa 177 m), ni el polvo, la visibilidad, la energía del traje o la fatiga."],
+      [tag("src", "DATO DEL REPO"), `<b>Ordena bien, pero no decide solo.</b> ROC AUC ${f2(M.roc_auc)} (ordena bien pares fácil/difícil) pero F1 ${f2(M.f1)}: como detector de «sí/no» falla bastante.`],
+    ];
+    return `${conf}<div class="card" style="margin-top:16px"><h3>Limitaciones y supuestos</h3>
+      <p class="desc">Qué no debes esperar del modelo. Detalle y fuentes en docs/LIMITACIONES_MODELO.md.</p>
+      <ul class="explain rad-list">${li.map(([t, h]) => `<li>${t} ${h}</li>`).join("")}</ul></div>`;
+  }
 
   /* =====================================================
      VISTA COMPLETA — Resumen automático

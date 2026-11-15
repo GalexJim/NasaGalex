@@ -57,6 +57,9 @@
   }
   MR.F = {};
   for (const k of Object.keys(D.layers)) if (k !== "grid") MR.F[k] = decode(D.layers[k]);
+  // capa opcional de confianza (desacuerdo entre los 300 árboles del bosque), de scripts/export_uncertainty.py
+  MR.EXTRA = window.MARS_EXTRA || null;
+  if (MR.EXTRA && MR.EXTRA.confidence) MR.F.confidence = decode(MR.EXTRA.confidence);
   MR.J = {};
   if (window.JEZERO_DATA && window.JEZERO_DATA.layers) {
     for (const k of Object.keys(window.JEZERO_DATA.layers)) {
@@ -127,7 +130,14 @@
     const len = pts[n - 1][2];
     return { length: len, meanSlope: s / n, maxSlope: smax, meanTrav: tr / n, meanRough: ro / n,
       steepFrac: steep / n, lowFrac: low / n, gain, hours: MR.estimateHours(pts),
-      hazards: MR.hazardZones(pts).length, minElev: Math.min(...pts.map(p => p[3])), maxElev: Math.max(...pts.map(p => p[3])) };
+      hazards: MR.hazardZones(pts).length, meanConf: MR.routeConfidence(pts), minElev: Math.min(...pts.map(p => p[3])), maxElev: Math.max(...pts.map(p => p[3])) };
+  };
+
+  // confianza media del modelo a lo largo de una ruta (0–1); null si no hay capa o la región no es Gale
+  MR.routeConfidence = function (pts) {
+    if (!MR.F.confidence || MR.currentRegion !== "gale" || !pts.length) return null;
+    let s = 0; for (const p of pts) s += MR.sample("confidence", p[0], p[1]);
+    return s / pts.length;
   };
 
   /* ---------- configuración global (umbrales y pesos) ---------- */
@@ -493,12 +503,16 @@
       norm: v => (v - D.layers.color_index.min) / (D.layers.color_index.max - D.layers.color_index.min),
       ramp: ramp([[0, 40, 90, 170], [0.5, 235, 235, 235], [1, 190, 50, 30]]),
       src: "Mosaico Viking MDIM 2.1 a color. Las anomalías señalan cambios de composición del suelo." },
+    { key: "confidence", name: "Confianza del modelo", sub: "Acuerdo entre los 300 árboles", lo: "Baja", hi: "Alta", prov: "der", provLabel: "DERIVADA",
+      norm: v => v, ramp: ramp([[0, 252, 236, 210], [0.5, 150, 172, 205], [1, 28, 66, 148]]),
+      src: "Qué tanto coinciden los 300 árboles del bosque aleatorio sobre una celda (1 = todos coinciden). Ojo: que coincidan no garantiza acierto; fuera del corredor donde entrenó (Curiosity, 19 km) pueden equivocarse todos juntos. Ver Condiciones → Modelo predictivo." },
     { key: "radiation", name: "Radiación", sub: "Índice relativo de exposición", lo: "Menor", hi: "Mayor", prov: "sim", provLabel: "SIMPLIFICADO",
       norm: v => { const r = MR.radiation.range; return (v - r[0]) / Math.max(1e-6, r[1] - r[0]); },
       ramp: ramp([[0, 235, 247, 235], [0.45, 250, 222, 110], [1, 170, 30, 110]]),
       src: "Modelo simplificado, no una medición. 1,00 = suelo del cráter a cielo abierto (≈ 0,65 mSv/día medido por MSL-RAD; Simonsen, NASA 2024). Sube con la altura (menos atmósfera encima) y baja donde el relieve tapa el cielo. El tamaño de esos dos efectos es un SUPUESTO." },
     { key: "none", name: "Sin capa", sub: "Solo mapa base", src: "", prov: "", provLabel: "" },
   ];
+  if (!MR.F.confidence) MR.LAYERS.splice(MR.LAYERS.findIndex(l => l.key === "confidence"), 1);
   MR.layerRGBA = function (key) {
     const img = new ImageData(G, G);
     const L = MR.LAYERS.find(l => l.key === key);
