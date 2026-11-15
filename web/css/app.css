@@ -1949,3 +1949,12 @@ html.reduce *, html.reduce *::before, html.reduce *::after { animation: none !im
 .rad-note { margin: 0 0 12px; font-size: 13px; color: var(--text-2); }
 .rad-list li { margin-bottom: 6px; }
 .legend-note { margin-top: 6px; font-size: 11px; color: var(--text-2); }
+
+/* ---------- jornada EVA: caja de soles en el briefing ---------- */
+.sol-box { margin: 10px 0; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--r-m); background: var(--panel-2); font-size: 13px; }
+.sol-head { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; }
+.sol-head b { font-size: 16px; }
+.sol-head span:not(.tag-sup) { color: var(--text-2); }
+.sol-box summary { cursor: pointer; margin-top: 6px; color: var(--accent); font-weight: 500; }
+.sol-box .explain { margin: 6px 0 0; padding-left: 18px; color: var(--text-2); }
+.sol-box .explain li { margin-bottom: 4px; }

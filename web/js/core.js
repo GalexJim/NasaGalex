@@ -127,9 +127,9 @@
       if (p[6] < MR.cfg.travThr) low++;
       if (i && p[3] > pts[i - 1][3]) gain += p[3] - pts[i - 1][3];
     }
-    const len = pts[n - 1][2];
+    const len = pts[n - 1][2], hrsAll = MR.estimateHours(pts);
     return { length: len, meanSlope: s / n, maxSlope: smax, meanTrav: tr / n, meanRough: ro / n,
-      steepFrac: steep / n, lowFrac: low / n, gain, hours: MR.estimateHours(pts),
+      steepFrac: steep / n, lowFrac: low / n, gain, hours: hrsAll, solsC: Math.max(1, Math.ceil(hrsAll / MR.eva.windowH() - 1e-9)),
       hazards: MR.hazardZones(pts).length, meanConf: MR.routeConfidence(pts), minElev: Math.min(...pts.map(p => p[3])), maxElev: Math.max(...pts.map(p => p[3])) };
   };
 
@@ -181,17 +181,46 @@
     const d = (b[2] - a[2]) * 1000;
     return d > 1 ? (b[3] - a[3]) / d : 0;
   };
-  MR.estimateHours = function (pts, mobility = "rover") {
+  // Velocidad (km/h) en el punto i: la misma que usa la simulación, para que las estimaciones y el recorrido coincidan.
+  // Incluye el ritmo más lento en tramos empinados (× 0,6, supuesto del prototipo) y las pausas configurables (solo a pie).
+  MR.speedAt = function (pts, i, mobility, zones) {
+    const rover = mobility === "rover";
+    let v = rover ? MR.roverSpeed(pts[i][4], pts[i][6]) : MR.walkSpeed(MR.gradeAt(pts, i), pts[i][6]);
+    if (zones && zones.some(z => pts[i][2] >= z.startKm - 0.05 && pts[i][2] <= z.endKm + 0.05)) v *= 0.6;
+    return rover ? v : v * MR.eva.paceFactor();
+  };
+  MR.estimateHours = function (pts, mobility = MR.eva.mobility) {
+    const zones = MR.hazardZones(pts);
     let h = 0;
-    for (let i = 1; i < pts.length; i++) {
-      const dk = pts[i][2] - pts[i - 1][2];
-      const speed = mobility === "rover"
-        ? MR.roverSpeed(pts[i][4], pts[i][6])
-        : MR.walkSpeed(MR.gradeAt(pts, i), pts[i][6]);
-      h += dk / speed;
-    }
+    for (let i = 1; i < pts.length; i++) h += (pts[i][2] - pts[i - 1][2]) / MR.speedAt(pts, i, mobility, zones);
     return h;
   };
+
+  /* ---------- jornada EVA: supuestos CONFIGURABLES ----------
+     Ninguna de estas cifras viene de una fuente oficial. Nelson (NASA, 2021) lista la duración y el ritmo de
+     las EVA en Marte como brechas de conocimiento abiertas, así que se exponen como supuestos que se pueden mover.
+     Los valores por defecto reproducen el comportamiento original del prototipo (08:00–17:00, sin pausas ni reserva). */
+  const EVA = (MR.eva = { mobility: "astronaut" });
+  EVA.DEFAULTS = { startHour: 8, durationH: 9, pauseMinPerH: 0, reserveMin: 0 };
+  EVA.cfg = Object.assign({}, EVA.DEFAULTS);
+  EVA.LIMITS = { startHour: [6, 10], durationH: [4, 12], pauseMinPerH: [0, 30], reserveMin: [0, 120] };
+  EVA.load = function (o) {
+    Object.keys(EVA.DEFAULTS).forEach(k => {
+      const v = +(o && o[k]); const [lo, hi] = EVA.LIMITS[k];
+      EVA.cfg[k] = isFinite(v) && o[k] != null ? Math.min(hi, Math.max(lo, v)) : EVA.DEFAULTS[k];
+    });
+  };
+  EVA.endHour = () => EVA.cfg.startHour + EVA.cfg.durationH;                 // fin de la jornada
+  EVA.walkEndHour = () => EVA.endHour() - EVA.cfg.reserveMin / 60;           // se deja de caminar antes: queda tiempo para volver
+  EVA.windowH = () => Math.max(0.25, EVA.cfg.durationH - EVA.cfg.reserveMin / 60); // horas de marcha por sol
+  EVA.paceFactor = () => (60 - EVA.cfg.pauseMinPerH) / 60;                   // las pausas se promedian en el ritmo
+  // cuántos soles toma una ruta con la jornada actual
+  EVA.plan = function (pts, mobility = EVA.mobility) {
+    const hours = MR.estimateHours(pts, mobility), len = pts[pts.length - 1][2], win = EVA.windowH();
+    return { hours, len, windowH: win, sols: hours / win, solsCeil: Math.max(1, Math.ceil(hours / win - 1e-9)), avgKmh: len / hours,
+      needKmhFor: n => len / (n * win), needWindowFor: n => hours / n + EVA.cfg.reserveMin / 60 };
+  };
+  MR.fmtHM = h => { const m = Math.round(h * 60); return String(Math.floor(m / 60) % 24).padStart(2, "0") + ":" + String(m % 60).padStart(2, "0"); };
   MR.roverSpeed = function (slopeDeg, trav) {
     const rad = ((slopeDeg || 0) * Math.PI) / 180;
     return Math.max(1.5, 12.0 * Math.max(0.2, Math.cos(rad)) * (0.6 + 0.4 * (trav != null ? trav : 0.5)));
@@ -207,13 +236,15 @@
     const len = pts[pts.length - 1][2];
     const hours = MR.estimateHours(pts, mobility);
     const isRover = mobility === "rover";
-    const o2Capacity = isRover ? 5184 : 576; // 72h vs 8h autonomía a 72 L/h
-    const o2Consumed = hours * 72;
+    // A pie, el traje se recarga cada noche (SUPUESTO): el consumo se mide por jornada EVA, no sobre todo el recorrido.
+    const useH = isRover ? hours : (hours <= MR.eva.windowH() ? hours : MR.eva.cfg.durationH);
+    const o2Capacity = isRover ? 5184 : 576; // 72h vs 8h autonomía a 72 L/h (supuestos del prototipo)
+    const o2Consumed = useH * 72;
     const o2Pct = Math.min(100, (o2Consumed / o2Capacity) * 100);
 
     const battCapacity = isRover ? 45.0 : 12.0; // kWh
     const battRate = isRover ? 3.2 : 1.5; // kWh/h
-    const battConsumed = hours * battRate;
+    const battConsumed = useH * battRate;
     const battPct = Math.min(100, (battConsumed / battCapacity) * 100);
 
     const radDose = MR.radiation.routeDose(pts, mobility); // mSv, modelo simplificado (ver MR.radiation)
@@ -231,7 +262,8 @@
       rejectionReason = `Destino sin refugio presurizado verificado (distancia mínima: ${minShelterDist.toFixed(1)} km > 1.0 km).`;
     } else if (o2Pct > 80.0) {
       valid = false;
-      rejectionReason = `Consumo de O₂ proyectado (${o2Pct.toFixed(1)}%) supera umbral de seguridad (reserva < 20%).`;
+      rejectionReason = isRover ? `Consumo de O₂ proyectado (${o2Pct.toFixed(1)}%) supera umbral de seguridad (reserva < 20%).`
+        : `Una jornada de ${useH.toFixed(1)} h usa el ${o2Pct.toFixed(0)} % del O₂ del traje (autonomía 8 h, supuesto; reserva < 20 %). Acorta la jornada en Ruta → Jornada EVA.`;
     } else if (battPct > 85.0) {
       valid = false;
       rejectionReason = `Consumo de batería proyectado (${battPct.toFixed(1)}%) supera umbral de seguridad.`;
@@ -239,7 +271,7 @@
 
     return {
       length: len,
-      hours,
+      hours, useH,
       o2Pct,
       o2Consumed,
       o2RemainingPct: Math.max(0, 100 - o2Pct),
@@ -317,12 +349,8 @@
     * (mobility === "rover" ? RAD.P.roverFactor : 1) * (RAD.speActive(spe, simMin) ? RAD.P.speMult : 1);
   // dosis prevista del recorrido solo por GCR (sin eventos solares), integrada a lo largo de la ruta
   RAD.routeDose = function (pts, mobility = "rover") {
-    let dose = 0;
-    for (let i = 1; i < pts.length; i++) {
-      const dk = pts[i][2] - pts[i - 1][2];
-      const sp = mobility === "rover" ? MR.roverSpeed(pts[i][4], pts[i][6]) : MR.walkSpeed(MR.gradeAt(pts, i), pts[i][6]);
-      dose += (dk / sp) * RAD.rate(pts[i], mobility, null, 0);
-    }
+    const zones = MR.hazardZones(pts); let dose = 0;
+    for (let i = 1; i < pts.length; i++) dose += ((pts[i][2] - pts[i - 1][2]) / MR.speedAt(pts, i, mobility, zones)) * RAD.rate(pts[i], mobility, null, 0);
     return dose;
   };
 

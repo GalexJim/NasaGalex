@@ -21,14 +21,15 @@
   ];
   const ONE_WAY_MIN = 12;           // retraso de comunicación Marte → Tierra (simulado)
   const MIN_PER_SEC = 2;            // x1 = 2 minutos marcianos por segundo real
-  const EVA_START = 8, EVA_END = 17;
+  // Jornada EVA configurable (ver MR.eva en core.js): inicio y fin de la marcha (el fin descuenta la reserva de seguridad)
+  const evaStart = () => MR.eva.cfg.startHour, evaEnd = () => MR.eva.walkEndHour(), hm = h => MR.fmtHM(h);
 
   function newTrip(c) {
     const base = MR.withKm(D.routes[c.main].points);
     return {
       crew: c, mode: "base", choice: "model", baseRoute: base, adjusted: null, shortRoute: null, route: null,
-      profileMode: "segura", mobility: "rover", alertTriggered: false,
-      km: 0, simMin: EVA_START * 60, playing: false, speed: 1, stages: [], stageIdx: 0,
+      profileMode: "segura", mobility: "astronaut", alertTriggered: false,
+      km: 0, simMin: MR.eva.cfg.startHour * 60, playing: false, speed: 1, stages: [], stageIdx: 0,
       findings: [], missions: [], log: [], ai: [], handled: {}, events: [], proposed: {},
       unread: { misiones: 1, bitacora: 0, hallazgos: 0 }, briefed: false, wx: null, lastWx: -1e9,
       lastTele: -1e9, flags: {}, alerts: 0, detours: 0, hazards: [], lows: [], stops: [], measure: null,
@@ -90,6 +91,7 @@
       if (im && im.tagName === "IMG" && im.dataset.fallback && !im.dataset.fbDone) { im.dataset.fbDone = "1"; im.src = im.dataset.fallback; }
     }, true);
     MR.cfg.radThr = +MR.store.get("radThr", MR.cfg.radThr) || MR.cfg.radThr;
+    MR.eva.load(MR.store.get("eva", {})); syncTripClocks();
     // tema y movimiento recordados
     const th = MR.store.get("theme", matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
     document.documentElement.dataset.theme = th;
@@ -100,7 +102,7 @@
     MR.Map.setLayer(S.layer, S.opacity);
     MR.Map.drawTraverse(true); MR.Map.drawCrism(true);
     MR.Map.onClick(onMapClick);
-    buildCrew(); buildLeftPanel(); bindTop(); bindKeys();
+    buildCrew(); buildLeftPanel(); bindEva(); bindTop(); bindKeys();
     if (window.innerWidth < 820) setLeft(false);
     renderAll();
     const urlParams = new URLSearchParams(window.location.search);
@@ -150,7 +152,7 @@
   function switchCrew(id) {
     if (T.crew.id === id) return;
     T.playing = false; closeAllTransient();
-    T = trips[id];
+    T = trips[id]; syncMobilityUI();
     renderAll(true);
     MR.Map.fit();
     banner({ kind: "info", title: `${T.crew.short} · ${T.crew.role}`, sub: "Viaje independiente: su ruta, reloj y bitácora son propios.", ttl: 3500 });
@@ -320,11 +322,9 @@
   }
 
   function setMobility(m) {
-    T.mobility = m;
-    document.querySelectorAll("#mobilitySeg button").forEach(b => {
-      b.setAttribute("aria-checked", b.dataset.mobility === m);
-    });
+    T.mobility = m; syncMobilityUI(); evaSummary();
     renderProfileMetrics();
+    if (T.mode === "plan") renderPlanCards();
     toast(`Modo de movilidad: ${m === "rover" ? "Rover presurizado" : "EVA a pie (traje)"}`);
   }
 
@@ -343,10 +343,10 @@
     box.innerHTML = `
       <div class="metric-item">
         <span class="metric-lbl">Tiempo estimado</span>
-        <span class="metric-val">${fmt(res.hours, 1)} h Sol</span>
+        <span class="metric-val">${fmt(res.hours, 1)} h · ${MR.eva.plan(r, T.mobility || "rover").solsCeil} ${MR.eva.plan(r, T.mobility || "rover").solsCeil === 1 ? "sol" : "soles"}</span>
       </div>
       <div class="metric-item">
-        <span class="metric-lbl">Consumo O₂ (${fmt(res.o2Consumed, 0)} L)</span>
+        <span class="metric-lbl">Consumo O₂ ${isRover ? "" : "por jornada "}(${fmt(res.o2Consumed, 0)} L)</span>
         <span class="metric-val" style="color:${res.o2Pct > 80 ? 'var(--danger)' : 'var(--nominal)'}">${fmt(res.o2Pct, 0)}% (reserva ${fmt(res.o2RemainingPct, 0)}%)</span>
       </div>
       <div class="metric-item">
@@ -868,6 +868,46 @@
   function selectLayer(key) {
     S.layer = key; MR.Map.setLayer(S.layer, S.opacity); renderLegend(); sync3dTexture();
   }
+  // Cuántos soles toma el recorrido, dicho con honestidad y con los números del modelo
+  function solInfoHtml(route) {
+    const E = MR.eva, c = E.cfg, foot = T.mobility !== "rover", ev = E.plan(route, T.mobility), other = E.plan(route, foot ? "rover" : "astronaut");
+    const need = ev.needKmhFor(3), hm = MR.fmtHM, sol = n => (n === 1 ? "sol" : "soles");
+    return `<div class="sol-box"><div class="sol-head"><b>≈ ${ev.solsCeil} ${sol(ev.solsCeil)}</b><span>${fmt(ev.hours, 0)} h de marcha en jornadas de ${fmt(ev.windowH, 1)} h (${hm(c.startHour)}–${hm(E.walkEndHour())})</span><span class="tag-sup">SUPUESTO</span></div>
+      <details><summary>¿Por qué no 3 soles?</summary><ul class="explain">
+        <li>El flujo base planteaba 3 soles. Con este modelo, ${foot ? "a pie" : "en rover"}, los ${fmt(ev.len, 0)} km llevan ${fmt(ev.hours, 0)} h a un ritmo medio de ${fmt(ev.avgKmh, 1)} km/h${foot ? " (en plano, 2,8 km/h: función de Tobler × 0,55 por el traje)" : ""}.</li>
+        <li>Para hacerlo en 3 soles harían falta jornadas de ${fmt(ev.needWindowFor(3), 1)} h o un ritmo medio de ${fmt(need, 1)} km/h (${fmt((need / ev.avgKmh - 1) * 100, 0)} % más rápido).</li>
+        <li>${foot ? "En rover presurizado" : "A pie"} serían ≈ ${fmt(other.hours, 0)} h (${other.solsCeil} ${sol(other.solsCeil)}).</li>
+        <li>La jornada, las pausas y la reserva se cambian en Ruta → Jornada EVA. Son supuestos: la NASA (Nelson, 2021) lista estos parámetros como brechas de conocimiento abiertas, sin cifra oficial.</li></ul></details></div>`;
+  }
+  function syncMobilityUI() {
+    MR.eva.mobility = T.mobility;
+    document.querySelectorAll("#mobilitySeg button").forEach(b => b.setAttribute("aria-checked", b.dataset.mobility === T.mobility));
+  }
+  function evaSummary() {
+    const el = $("evaSummary"); if (!el) return;
+    const ev = MR.eva.plan(activeRoute() || T.baseRoute, T.mobility), c = MR.eva.cfg;
+    el.textContent = `Jornada ${MR.fmtHM(c.startHour)}–${MR.fmtHM(MR.eva.walkEndHour())}: ${fmt(ev.windowH, 1)} h de marcha por sol. Ruta actual: ≈ ${fmt(ev.hours, 0)} h → ≈ ${ev.solsCeil} ${ev.solsCeil === 1 ? "sol" : "soles"}.`;
+  }
+  // los viajes que aún no empezaron arrancan a la hora de inicio configurada
+  function syncTripClocks() {
+    Object.values(trips).forEach(t => { if ((t.mode === "base" || t.mode === "plan") && t.km === 0) t.simMin = Math.floor(t.simMin / 1440) * 1440 + MR.eva.cfg.startHour * 60; });
+  }
+  function bindEva() {
+    const EV = MR.eva, F = [["evaStart", "evaStartOut", "startHour", v => MR.fmtHM(v)], ["evaDur", "evaDurOut", "durationH", v => fmt(v, 1) + " h"],
+      ["evaPause", "evaPauseOut", "pauseMinPerH", v => v + " min"], ["evaReserve", "evaResOut", "reserveMin", v => v + " min"]];
+    const paint = () => F.forEach(([id, out, key, f]) => { $(id).value = EV.cfg[key]; $(out).textContent = f(EV.cfg[key]); });
+    const changed = () => {
+      MR.store.set("eva", EV.cfg); syncTripClocks(); evaSummary(); renderStatus(); renderProfileMetrics();
+      if (T.mode === "plan") renderPlanCards();
+      toast("Jornada EVA actualizada");
+    };
+    F.forEach(([id, out, key, f]) => {
+      $(id).addEventListener("input", e => { EV.cfg[key] = +e.target.value; $(out).textContent = f(+e.target.value); evaSummary(); });
+      $(id).addEventListener("change", changed);
+    });
+    $("btnEvaReset").addEventListener("click", () => { Object.assign(EV.cfg, EV.DEFAULTS); paint(); changed(); });
+    paint(); evaSummary();
+  }
   function renderLegend() {
     const L = MR.LAYERS.find(l => l.key === S.layer);
     document.querySelectorAll(".layer-opt").forEach(b => b.setAttribute("aria-checked", b.dataset.key === S.layer));
@@ -1224,12 +1264,13 @@
     if (T.mode !== "base") return;
     T.briefed = true;
     const r = T.baseRoute, st = MR.routeStats(r), n = makeStages(r).length;
-    const minT = Math.min(MR.weather(EVA_START, st.maxElev, T.crew.profile).air, MR.weather(EVA_END, st.maxElev, T.crew.profile).air);
+    const minT = Math.min(MR.weather(evaStart(), st.maxElev, T.crew.profile).air, MR.weather(evaEnd(), st.maxElev, T.crew.profile).air);
     showModal(`<div class="mhead"><div class="tag-line"><span class="tg assigned">Misión asignada · Principal</span><span style="color:var(--text-2)">${T.crew.short} · ${T.crew.role}</span></div>
       <h2>${esc(T.crew.title)}</h2>
       <div class="who">${esc(goalObj().note)}</div></div>
       <div class="mbody">${factsHtml([[fmt(st.length, 0) + " km", "distancia"], [(st.maxElev - r[0][3] >= 0 ? "+" : "") + fmt(st.maxElev - r[0][3], 0) + " m", "desnivel"], [n, "etapas"],
-        [fmt(minT, 0) + " °C", "mínima en EVA"], [st.hazards, st.hazards === 1 ? "tramo empinado" : "tramos empinados"], ["≈ " + fmt(st.hours, 0) + " h", "de caminata"]])}
+        [fmt(minT, 0) + " °C", "mínima en EVA"], [st.hazards, st.hazards === 1 ? "tramo empinado" : "tramos empinados"], ["≈ " + fmt(st.hours, 0) + " h", T.mobility === "rover" ? "de traslado" : "de caminata"]])}
+      ${solInfoHtml(r)}
       <div class="who">Asignada por: Control de misión · Ruta calculada por el modelo predictivo</div>
       <div class="actions"><button class="btn ghost spacer" data-c>Ver condiciones</button><button class="btn" data-n>Ahora no</button><button class="btn primary" data-a data-focus>Aceptar misión</button></div></div>`, {
       bind: m => {
@@ -1516,13 +1557,13 @@
     const L = T.route[T.route.length - 1][2], n = T.stages.length;
     const card = $("stageCard");
     if (kind === "night") {
-      const nxt = MR.solTime((Math.floor(T.simMin / 1440) + 1) * 1440 + EVA_START * 60);
+      const nxt = MR.solTime((Math.floor(T.simMin / 1440) + 1) * 1440 + evaStart() * 60);
       const night = MR.weather(4, curPos()[3], T.crew.profile).air;
-      card.innerHTML = `<h3>${MR.ICONS.info} Fin de la jornada EVA (${EVA_END}:00)</h3>
+      card.innerHTML = `<h3>${MR.ICONS.info} Fin de la jornada EVA (${hm(evaEnd())})</h3>
         <p>${fmt(T.km)} km recorridos · quedan ${fmt(L - T.km)} km. Caminar de noche no está permitido.</p>
         <div class="next"><div class="stat"><span class="v num">${fmt(night, 0)} °C</span><span class="k">mínima esta noche</span></div>
         <div class="stat"><span class="v num">${nxt.label}</span><span class="k">reanudación</span></div></div>
-        <div class="actions"><button class="btn primary" data-r>Descansar hasta las 08:00</button></div>`;
+        <div class="actions"><button class="btn primary" data-r>Descansar hasta las ${hm(evaStart())}</button></div>`;
       card.querySelector("[data-r]").addEventListener("click", () => { restUntilMorning(); });
     } else {
       const done = T.stageIdx; const a = T.stages[done - 1] || 0, b = T.stages[done] || L;
@@ -1530,7 +1571,7 @@
       const gain = seg.length ? seg[seg.length - 1][3] - seg[0][3] : 0;
       const hz = T.hazards.filter(z => z.startKm >= a && z.startKm <= b).length;
       const h = seg.length > 1 ? MR.estimateHours(MR.withKm(seg)) : 0;
-      const minT = MR.weather(Math.min(EVA_END, time().hour + h), seg.length ? Math.max(...seg.map(p => p[3])) : 0, T.crew.profile).air;
+      const minT = MR.weather(Math.min(evaEnd(), time().hour + h), seg.length ? Math.max(...seg.map(p => p[3])) : 0, T.crew.profile).air;
       card.innerHTML = `<h3>${MR.ICONS.ok} Etapa ${done} de ${n} completada</h3>
         <p>${fmt(T.km)} km · quedan ${fmt(L - T.km)} km</p>
         <div class="next"><div class="stat"><span class="v num">${gain >= 0 ? "+" : ""}${fmt(gain, 0)} m</span><span class="k">desnivel próximo tramo</span></div>
@@ -1546,7 +1587,7 @@
   }
   function restUntilMorning() {
     $("stageCard").hidden = true;
-    T.simMin = (Math.floor(T.simMin / 1440) + 1) * 1440 + EVA_START * 60;
+    T.simMin = (Math.floor(T.simMin / 1440) + 1) * 1440 + evaStart() * 60;
     T.flags["eva1h_" + time().sol] = false;
     logSys(`Descanso nocturno. Reanudación ${time().label}.`);
     T.events.push({ t: T.simMin, c: "var(--text-2)", txt: `Inicio del ${time().label.split(" · ")[0]}` });
@@ -1585,9 +1626,7 @@
   function advance(dMin) {
     const R = T.route, L = R[R.length - 1][2];
     const i = MR.nearestKm(R, T.km);
-    let v = (T.mobility === "rover" ? MR.roverSpeed(R[i][4], R[i][6]) : MR.walkSpeed(MR.gradeAt(R, i), R[i][6]));
-    const inZone = T.hazards.find(z => T.km >= z.startKm - 0.05 && T.km <= z.endKm + 0.05);
-    if (inZone) v *= 0.6;
+    const v = MR.speedAt(R, i, T.mobility, T.hazards);
     T.km = Math.min(L, T.km + (v * dMin) / 60); T.simMin += dMin;
     accrueDose(dMin);
     // datos de condiciones cada 10 min marcianos
@@ -1620,8 +1659,8 @@
       return stageCard("stage");
     }
     // ventana EVA
-    if (h >= EVA_END - 1 && !T.flags["eva1h_" + time().sol]) { T.flags["eva1h_" + time().sol] = true; banner({ kind: "warn", title: "Queda 1 h de jornada EVA", sub: `A las ${EVA_END}:00 se detiene el recorrido`, ttl: 6000 }); }
-    if (h >= EVA_END || h < EVA_START) return stageCard("night");
+    if (h >= evaEnd() - 1 && !T.flags["eva1h_" + time().sol]) { T.flags["eva1h_" + time().sol] = true; banner({ kind: "warn", title: "Queda 1 h de jornada EVA", sub: `A las ${hm(evaEnd())} se detiene el recorrido`, ttl: 6000 }); }
+    if (h >= evaEnd() || h < evaStart()) return stageCard("night");
     // misiones secundarias: completadas / propuestas por el sistema
     const p = curPos();
     T.missions.forEach(m => {
@@ -1888,7 +1927,7 @@
     const card = (key, title, st, why, bad) => `<button class="rcard" role="radio" aria-checked="${T.choice === key}" data-k="${key}">
       <header><b>${title}</b>${key === "model" ? '<span class="badge ok">Recomendada</span>' : '<span class="badge warn">Más riesgo</span>'}</header>
       <div class="stats"><div class="stat"><span class="v">${fmt(st.length, 1)}</span><span class="k">km</span></div>
-        <div class="stat"><span class="v">≈${fmt(st.hours, 0)}</span><span class="k">h caminando</span></div>
+        <div class="stat"><span class="v">≈${fmt(st.hours, 0)}</span><span class="k">h · ${st.solsC} ${st.solsC === 1 ? "sol" : "soles"}</span></div>
         <div class="stat"><span class="v">${fmt(st.meanTrav, 2)}</span><span class="k">facilidad media</span></div>
         <div class="stat"><span class="v">${st.hazards}</span><span class="k">tramos &gt; ${MR.cfg.critSlope}°</span></div></div>
       <p class="why ${bad ? "bad" : ""}">${why}</p></button>`;
@@ -2155,7 +2194,7 @@
       : [{ name: VARS[dashVar][0], values: dashVar === "uv" ? P.uv_w_m2 : dashVar === "p" ? P.pressure_pa : P.rh_pct, hours: hrs, color: c1 }];
     const vals = series[0].values; const mn = Math.min(...vals), mx = Math.max(...vals);
     const now = T.mode === "walk" || T.mode === "done" ? time().hour : null;
-    const desc = { temp: "Ciclo de un sol completo medido por Curiosity. La franja azul es la ventana de caminata (08:00–17:00).",
+    const desc = { temp: "Ciclo de un sol completo medido por Curiosity. La franja azul es la ventana de caminata (" + hm(evaStart()) + "–" + hm(MR.eva.endHour()) + ", configurable).",
       uv: "La radiación ultravioleta llega casi sin filtro: el polvo en el aire la reduce (sol 4500 tiene más polvo).",
       p: "La presión es ~0,6 % de la terrestre y sube y baja cada día por el calentamiento de la atmósfera.",
       rh: "Humedad relativa: sube de noche cuando el aire se enfría." }[dashVar];
@@ -2179,7 +2218,7 @@
     const B = T.crew.main === "summit" ? MR.withKm(D.routes.summit_short.points) : T.shortRoute;
     const sa = MR.routeStats(A), sb = B ? MR.routeStats(B) : null;
     const withConf = sa.meanConf != null;
-    const rows = [["Longitud", "length", " km", 1, "min"], ["Horas de caminata (est.)", "hours", " h", 1, "min"], ["Pendiente media", "meanSlope", "°", 1, "min"], ["Pendiente máxima", "maxSlope", "°", 1, "min"],
+    const rows = [["Longitud", "length", " km", 1, "min"], ["Horas de caminata (est.)", "hours", " h", 1, "min"], ["Soles de EVA (est.)", "solsC", "", 0, "min"], ["Pendiente media", "meanSlope", "°", 1, "min"], ["Pendiente máxima", "maxSlope", "°", 1, "min"],
       ["Rugosidad media", "meanRough", " m", 1, "min"], ["Facilidad de paso media", "meanTrav", "", 2, "max"], ...(withConf ? [["Confianza del modelo (media)", "meanConf", "", 2, "max"]] : []), ["Tramos sobre el umbral", "hazards", "", 0, "min"], ["Trayecto con paso difícil", "lowFrac", " %", 0, "min", 100]];
     const cell = (st, other, r) => { const v = st[r[1]] * (r[5] || 1); const o = other ? other[r[1]] * (r[5] || 1) : null;
       const best = o != null && (r[4] === "min" ? v < o : v > o); return `<td class="${best ? "best" : ""}">${fmt(v, r[3])}${r[2]}</td>`; };
@@ -2297,7 +2336,7 @@
   function openSummary() {
     const el = $("summary"), R = T.route, st = MR.routeStats(R);
     const sols = Math.floor(T.simMin / 1440) + 1, sec = T.missions.filter(m => m.status === "completada").length;
-    const hrs = (T.simMin - EVA_START * 60) / 60;
+    const hrs = (T.simMin - evaStart() * 60) / 60;
     el.innerHTML = `<header class="fv-head"><button class="btn" data-back>↩ Volver al mapa</button><div><h2>Resumen de la misión</h2><div class="sub">${T.crew.short} · ${T.crew.role}</div></div></header>
       <div class="fv-body"><div class="sum-hero"><div>
         <h1><span class="ok">${MR.ICONS.ok}</span>${T.returning ? "Regreso al refugio completado" : "Misión completada"}</h1>

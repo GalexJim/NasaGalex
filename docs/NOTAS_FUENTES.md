@@ -135,8 +135,8 @@ Surgieron al revisar `core.js`, `app.js` y los datos. Son hechos de la revisión
 |---|---|---|
 | Dosis EVA 0,027 mSv/h | `core.js` | Respaldado (≈ 0,65 mSv/día, Simonsen) |
 | Dosis rover 0,012 mSv/h (× 0,44 frente a caminar) | `core.js` (`MR.radiation.P.roverFactor`) | Rotulado «supuesto» en la interfaz (Fase 1) |
-| Jornada EVA 08:00–17:00 | `app.js` | Sin fuente → «supuesto configurable» (Fase 3) |
-| Factor 0,55 del traje y 0,35 por terreno en `walkSpeed` | `core.js:164` | Sin fuente → «supuesto» (Fase 3) |
+| Jornada EVA 08:00–17:00, pausas y reserva | `MR.eva` en `core.js` | Configurables y rotulados «supuesto» (Fase 3, `docs/JORNADA_EVA.md`) |
+| Factor 0,55 del traje, 0,35 por terreno y × 0,6 en tramos empinados | `core.js` (`walkSpeed`, `speedAt`) | Sin fuente → «supuesto» (Fase 3) |
 | O₂ 72 L/h, 576 L (8 h) para EVA; batería 12 kWh | `core.js:199–204` | Sin fuente → «supuesto» |
 | Veto de pendiente 20° | `core.js:134` | Decisión de diseño del planificador, no un límite medido |
 

@@ -119,7 +119,7 @@
     if (lo < 0 && hi > 0 && cfg.showZero) el("line", { x1: m.l, x2: Wd - m.r, y1: Y(0), y2: Y(0), class: "zero" }, svg);
     for (let h = 0; h <= 24; h += 3) el("text", { x: X(h), y: Ht - 10, "text-anchor": "middle" }, svg).textContent = String(h).padStart(2, "0") + ":00";
     // ventana EVA
-    if (cfg.eva) el("rect", { x: X(8), width: X(17) - X(8), y: m.t, height: Ht - m.t - m.b, fill: css("--accent"), "fill-opacity": .06 }, svg);
+    if (cfg.eva) el("rect", { x: X(MR.eva ? MR.eva.cfg.startHour : 8), width: X(MR.eva ? MR.eva.endHour() : 17) - X(MR.eva ? MR.eva.cfg.startHour : 8), y: m.t, height: Ht - m.t - m.b, fill: css("--accent"), "fill-opacity": .06 }, svg);
     cfg.series.forEach(s => {
       const hrs = s.hours; let d = "";
       s.values.forEach((v, i) => { d += (i ? "L" : "M") + X(hrs[i]).toFixed(1) + "," + Y(v).toFixed(1); });
