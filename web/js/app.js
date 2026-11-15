@@ -693,17 +693,32 @@
         if (MR.Globe3D && MR.Globe3D.ready) MR.Globe3D.setExag(val);
       });
     }
-    const btnMola = $("btnGlobeMola"), btnVik = $("btnGlobeViking");
-    if (btnMola && btnVik) {
-      btnMola.addEventListener("click", () => {
-        btnMola.classList.add("active"); btnVik.classList.remove("active");
-        if (MR.Globe3D && MR.Globe3D.ready) MR.Globe3D.setLayer("mola");
-      });
-      btnVik.addEventListener("click", () => {
-        btnVik.classList.add("active"); btnMola.classList.remove("active");
-        if (MR.Globe3D && MR.Globe3D.ready) MR.Globe3D.setLayer("viking");
+
+    const btnGlobeToggle = $("btnGlobeToggleMenu");
+    if (btnGlobeToggle) {
+      btnGlobeToggle.addEventListener("click", () => {
+        const isExp = btnGlobeToggle.getAttribute("aria-expanded") === "true";
+        btnGlobeToggle.setAttribute("aria-expanded", !isExp);
+        const body = $("ctlGlobeBody");
+        if (body) body.classList.toggle("open", !isExp);
       });
     }
+
+    document.querySelectorAll("[data-base-layer]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll("[data-base-layer]").forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+        if (MR.Globe3D && MR.Globe3D.ready) MR.Globe3D.setBaseLayer(btn.dataset.baseLayer);
+      });
+    });
+
+    document.querySelectorAll("[data-ov-layer]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        btn.classList.toggle("active");
+        if (MR.Globe3D && MR.Globe3D.ready) MR.Globe3D.toggleOverlay(btn.dataset.ovLayer);
+      });
+    });
+
     document.querySelectorAll("[data-globe-go]").forEach(btn => {
       btn.addEventListener("click", () => {
         const [lon, lat, h] = btn.dataset.globeGo.split(",").map(Number);
@@ -1790,6 +1805,12 @@
     const cg = $("ctlGlobe"); if (cg) cg.hidden = v !== "globe";
     $("zoomCtl").hidden = v !== "2d";
     closePointUI();
+
+    const glSec = $("globeLayersSection"), crSec = $("craterLayersSection");
+    if (glSec && crSec) {
+      glSec.hidden = v !== "globe";
+      crSec.hidden = v === "globe";
+    }
 
     if (v === "3d") {
       if (MR.Globe3D && MR.Globe3D.ready) MR.Globe3D.stop();

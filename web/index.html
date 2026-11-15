@@ -107,20 +107,36 @@
   </div>
 
   <div class="ctl3d ctl-globe" id="ctlGlobe" hidden>
-    <label>Exageración <input type="range" id="globeExag" min="1" max="25" step="0.5" value="6"><output id="globeExagVal">6×</output></label>
-    <div class="globe-layers" role="group">
-      <button type="button" class="btn-globe-layer active" id="btnGlobeMola">MOLA Relieve</button>
-      <button type="button" class="btn-globe-layer" id="btnGlobeViking">Viking Color</button>
+    <div class="ctl-globe-main">
+      <button type="button" class="btn-globe-toggle-menu" id="btnGlobeToggleMenu" aria-expanded="false" title="Alternar panel de controles">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+        <span>Controles Planeta ▾</span>
+      </button>
+
+      <div class="ctl-globe-body" id="ctlGlobeBody">
+        <div class="ctl-globe-row">
+          <label class="ctl-exag-lbl">Exageración: <input type="range" id="globeExag" min="1" max="25" step="0.5" value="6"><output id="globeExagVal">6×</output></label>
+          <div class="globe-layers-pills" role="group" aria-label="Capas rápidas">
+            <button type="button" class="btn-globe-layer active" data-base-layer="Mars_MOLA_blend200ppx_HRSC_ClrShade_clon0dd_200mpp_lzw" title="MOLA/HRSC Color">Color</button>
+            <button type="button" class="btn-globe-layer" data-base-layer="Mars_MOLA_blend200ppx_HRSC_Shade_clon0dd_200mpp_lzw" title="MOLA/HRSC Relieve gris">Relieve</button>
+            <button type="button" class="btn-globe-layer" data-base-layer="Mars_Viking_MDIM21_ClrMosaic_global_232m" title="Viking Color Real">Viking</button>
+            <button type="button" class="btn-globe-overlay" data-ov-layer="TES_Thermal_Inertia" title="Alternar capa de Inercia Térmica TES">+ Térmico</button>
+            <button type="button" class="btn-globe-overlay" data-ov-layer="TES_Plagioclase" title="Alternar capa de Plagioclasa TES">+ Plagioclasa</button>
+          </div>
+        </div>
+        <div class="loc-shortcuts" role="group" aria-label="Saltar a hito geológico">
+          <span class="ctl-tag">Hitos:</span>
+          <button type="button" class="loc-btn" data-globe-go="-133.8,18.65,14" title="Olympus Mons (+21.2 km)">Olympus Mons</button>
+          <button type="button" class="loc-btn" data-globe-go="-59,-14,22" title="Valles Marineris (4,000 km)">Valles Marineris</button>
+          <button type="button" class="loc-btn" data-globe-go="70,-42,16" title="Hellas Planitia (-8.2 km)">Hellas</button>
+          <button type="button" class="loc-btn" data-globe-go="137.4,-4.6,4.5" title="Cráter Gale (Curiosity)">Gale</button>
+          <button type="button" class="loc-btn" data-globe-go="77.45,18.38,4.5" title="Cráter Jezero (Perseverance)">Jezero</button>
+          <button type="button" class="loc-btn" data-globe-go="0,0,120" title="Vista Global">Global</button>
+        </div>
+      </div>
+
+      <span class="globe-coords" id="globeCoords">Lon 0.00° Lat 0.00° · Altitud: 7000 km</span>
     </div>
-    <div class="loc-shortcuts" role="group">
-      <button type="button" class="loc-btn" data-globe-go="-133.8,18.65,14" title="Olympus Mons (+21.2 km)">Olympus Mons</button>
-      <button type="button" class="loc-btn" data-globe-go="-59,-14,22" title="Valles Marineris (4,000 km)">Valles Marineris</button>
-      <button type="button" class="loc-btn" data-globe-go="70,-42,16" title="Hellas Planitia (-8.2 km)">Hellas</button>
-      <button type="button" class="loc-btn" data-globe-go="137.4,-4.6,4.5" title="Cráter Gale (Curiosity)">Gale</button>
-      <button type="button" class="loc-btn" data-globe-go="77.45,18.38,4.5" title="Cráter Jezero (Perseverance)">Jezero</button>
-      <button type="button" class="loc-btn" data-globe-go="0,0,120" title="Vista Global">Global</button>
-    </div>
-    <span class="globe-coords" id="globeCoords">Lon 0.00° Lat 0.00° · Altitud: 7000 km</span>
   </div>
 
   <!-- ============ IZQUIERDA: capas y filtros ============ -->
@@ -138,26 +154,39 @@
       </div>
 
       <section class="lp-sec" data-lpsec="capas">
-        <h3>Región marciana</h3>
-        <div class="seg region-seg" role="radiogroup" aria-label="Seleccionar región">
-          <button role="radio" aria-checked="true" class="rqs-btn active" data-region="gale">Cráter Gale</button>
-          <button role="radio" aria-checked="false" class="rqs-btn" data-region="jezero">Cráter Jezero</button>
+        <!-- Capas del Planeta 3D (NASA Mars Trek) -->
+        <div id="globeLayersSection" hidden>
+          <div class="globe-layers-head">
+            <h3>Capas Planetarias NASA Mars Trek</h3>
+            <span class="badge badge-nasa">NASA TREK WMTS</span>
+          </div>
+          <p class="tl-intro">Sensores orbitales MOLA, HRSC, TES y Viking superpuestos en tiempo real sobre el modelo digital de elevación 3D.</p>
+          <div class="globe-layers-list" id="globeLayersList"></div>
         </div>
 
-        <h3>Mapa base</h3>
-        <div class="seg" id="baseSeg" role="radiogroup" aria-label="Mapa base">
-          <button role="radio" aria-checked="true" data-base="relief">Relieve</button>
-          <button role="radio" aria-checked="false" data-base="color">Altimetría color</button>
-          <button role="radio" aria-checked="false" data-base="thermal">Térmico</button>
+        <!-- Capas locales de cráter (Gale / Jezero) -->
+        <div id="craterLayersSection">
+          <h3>Región marciana</h3>
+          <div class="seg region-seg" role="radiogroup" aria-label="Seleccionar región">
+            <button role="radio" aria-checked="true" class="rqs-btn active" data-region="gale">Cráter Gale</button>
+            <button role="radio" aria-checked="false" class="rqs-btn" data-region="jezero">Cráter Jezero</button>
+          </div>
+
+          <h3>Mapa base</h3>
+          <div class="seg" id="baseSeg" role="radiogroup" aria-label="Mapa base">
+            <button role="radio" aria-checked="true" data-base="relief">Relieve</button>
+            <button role="radio" aria-checked="false" data-base="color">Altimetría color</button>
+            <button role="radio" aria-checked="false" data-base="thermal">Térmico</button>
+          </div>
+          <h3>Capa de análisis</h3>
+          <div class="layer-list" id="layerList" role="radiogroup" aria-label="Capa de análisis"></div>
+          <label class="slider">Opacidad <input type="range" id="opacity" min="0.1" max="1" step="0.05" value="0.55"></label>
+          <div class="legend" id="legend"></div>
+          <h3>Referencias</h3>
+          <label class="check"><input type="checkbox" id="chkContours"> Curvas de nivel (cada 500 m)</label>
+          <label class="check"><input type="checkbox" id="chkTraverse" checked> Recorrido real de Curiosity</label>
+          <label class="check"><input type="checkbox" id="chkCrism" checked> Huellas espectrales CRISM</label>
         </div>
-        <h3>Capa de análisis</h3>
-        <div class="layer-list" id="layerList" role="radiogroup" aria-label="Capa de análisis"></div>
-        <label class="slider">Opacidad <input type="range" id="opacity" min="0.1" max="1" step="0.05" value="0.55"></label>
-        <div class="legend" id="legend"></div>
-        <h3>Referencias</h3>
-        <label class="check"><input type="checkbox" id="chkContours"> Curvas de nivel (cada 500 m)</label>
-        <label class="check"><input type="checkbox" id="chkTraverse" checked> Recorrido real de Curiosity</label>
-        <label class="check"><input type="checkbox" id="chkCrism" checked> Huellas espectrales CRISM</label>
       </section>
 
       <section class="lp-sec" data-lpsec="objetivos" hidden>

@@ -265,6 +265,31 @@ class Handler(BaseHTTPRequestHandler):
                 if name == "reportes":
                     reports = storage.list_reports(q.get("author") or q.get("autor"))
                     return self._json(200, [r.to_dict() for r in reports])
+                if name == "proxy/trek":
+                    layer = q.get("layer", "")
+                    z = q.get("z", "0")
+                    r = q.get("r", "0")
+                    c = q.get("c", "0")
+                    ext = q.get("ext", "jpg")
+                    if not re.match(r"^[A-Za-z0-9_-]+$", layer) or not (z.isdigit() and r.isdigit() and c.isdigit()) or ext not in ("jpg", "png"):
+                        return self._json(400, {"error": "parámetros de tesela inválidos"})
+                    cache_dir = DATA / "cache_trek" / layer / z / r
+                    cache_dir.mkdir(parents=True, exist_ok=True)
+                    cache_file = cache_dir / f"{c}.{ext}"
+                    if cache_file.exists():
+                        ctype = "image/png" if ext == "png" else "image/jpeg"
+                        return self._send(200, cache_file.read_bytes(), ctype)
+                    target_url = f"https://trek.nasa.gov/tiles/Mars/EQ/{layer}/1.0.0/default/default028mm/{z}/{r}/{c}.{ext}"
+                    try:
+                        import urllib.request
+                        req = urllib.request.Request(target_url, headers={"User-Agent": "Mozilla/5.0 MarsRoute/1.0"})
+                        with urllib.request.urlopen(req, timeout=8) as resp:
+                            data = resp.read()
+                            cache_file.write_bytes(data)
+                            ctype = resp.headers.get("Content-Type") or ("image/png" if ext == "png" else "image/jpeg")
+                            return self._send(200, data, ctype)
+                    except Exception as exc:
+                        return self._json(502, {"error": f"Fallo al obtener tesela de NASA Trek: {exc}"})
             except ValueError as exc:
                 return self._json(400, {"error": str(exc)})
             return self._json(404, {"error": "ruta de API desconocida"})

@@ -4,6 +4,8 @@ __pycache__/
 .pytest_cache/
 .ipynb_checkpoints/
 data/cache/
+backend/data/cache_trek/
+data/cache_trek/
 data/raw/rems/**/*.TAB
 data/processed/layers.npz
 outputs/*.npy
