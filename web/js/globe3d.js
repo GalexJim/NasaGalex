@@ -29,6 +29,34 @@
   let raycaster, mouse;
   const beacons = [];
 
+  // Grupos 3D para puntos de control, minerales y rutas
+  let pinsGroup = null, routeGroup = null, roverGroup = null;
+  let activeRouteMesh = null, doneRouteMesh = null, secRouteMeshes = [];
+  let roverMesh = null, roverBeam = null;
+  let lastState = null;
+  const pins = [];
+
+  const PIN_COLORS = {
+    meta: 0xfc3d21,
+    base: 0x1e64dc,
+    refugio: 0x10b981,
+    mineral: 0x2f7fb8,
+    espectral: 0x2f7fb8,
+    ciencia: 0xb5651d,
+    referencia: 0xc0c8d4,
+    hallazgo: 0x46c882,
+    secundaria: 0xa68bff,
+    propuesta: 0xa68bff
+  };
+
+  const MINERAL_COLORS = {
+    "Carbonatos / Olivino": 0x00d26a,
+    "Arcillas / Filosilicatos": 0x00c8e0,
+    "Sulfatos hidratados": 0x4da6ff,
+    "Óxidos de hierro": 0xff7043,
+    "Silicatos basálticos": 0x90a4ae
+  };
+
   // Catálogo oficial de capas NASA Mars Trek
   const TREK_LAYERS = [
     {
@@ -147,7 +175,7 @@
     scene.fog = new THREE.Fog(sky, 15, 85);
 
     camera = new THREE.PerspectiveCamera(45, (host.clientWidth || window.innerWidth) / (host.clientHeight || window.innerHeight), 0.001, 2500);
-    camera.position.set(0, 110, 55);
+    camera.position.set(137.4, 4.5, 7.75);
 
     // Iluminación solar marciana
     scene.add(new THREE.AmbientLight(0xffffff, 0.7));
@@ -173,6 +201,15 @@
     controls.maxDistance = 260;
     controls.maxPolarAngle = Math.PI * 0.44;
     controls.target.set(137.4, 0, 4.6);
+    camera.lookAt(controls.target);
+    controls.update();
+
+    pinsGroup = new THREE.Group();
+    routeGroup = new THREE.Group();
+    roverGroup = new THREE.Group();
+    scene.add(pinsGroup);
+    scene.add(routeGroup);
+    scene.add(roverGroup);
 
     createBeacons();
     setupInteraction();
@@ -237,19 +274,24 @@
            (hash(xi, yi + 1) * (1 - u) + hash(xi + 1, yi + 1) * u) * v;
   }
   function fbm(lon, lat) {
-    let a = 0.5, f = 0.08, s = 0;
-    for (let i = 0; i < 6; i++) { s += a * vnoise(lon * f, lat * f); f *= 2; a *= 0.5; }
+    let a = 0.55, f = 0.08, s = 0;
+    for (let i = 0; i < 3; i++) { s += a * vnoise(lon * f, lat * f); f *= 2.2; a *= 0.5; }
     return s;
   }
   function ramp(t) {
-    const stops = [[0, [40, 20, 40]], [0.25, [120, 50, 30]], [0.5, [190, 110, 60]], [0.75, [225, 170, 120]], [1, [250, 240, 235]]];
-    for (let i = 1; i < stops.length; i++) {
-      if (t <= stops[i][0]) {
-        const [t0, c0] = stops[i - 1], [t1, c1] = stops[i], k = (t - t0) / (t1 - t0);
-        return c0.map((v, j) => (v + (c1[j] - v) * k) / 255);
-      }
+    if (t <= 0.25) {
+      const k = t / 0.25;
+      return [(40 + 80 * k) / 255, (20 + 30 * k) / 255, (40 - 10 * k) / 255];
+    } else if (t <= 0.5) {
+      const k = (t - 0.25) / 0.25;
+      return [(120 + 70 * k) / 255, (50 + 60 * k) / 255, (30 + 30 * k) / 255];
+    } else if (t <= 0.75) {
+      const k = (t - 0.5) / 0.25;
+      return [(190 + 35 * k) / 255, (110 + 60 * k) / 255, (60 + 60 * k) / 255];
+    } else {
+      const k = Math.min(1, (t - 0.75) / 0.25);
+      return [(225 + 25 * k) / 255, (170 + 70 * k) / 255, (120 + 115 * k) / 255];
     }
-    return [1, 1, 1];
   }
 
   async function buildTile(z, r, c) {
@@ -460,6 +502,41 @@
     }
   }
 
+  /* ---------- Coordenadas y Elevación en el Planeta ---------- */
+  function getElev(lon, lat, fallback = 0) {
+    if (window.MR && typeof window.MR.sample === "function") {
+      try {
+        const s = window.MR.sample("dem", lon, lat);
+        if (typeof s === "number" && !isNaN(s) && s !== 0) return s;
+      } catch (e) {}
+    }
+    const allM = window.MARS_MINERALS || [];
+    const m = allM.find(x => Math.abs(x.lon - lon) < 0.002 && Math.abs(x.lat - lat) < 0.002);
+    if (m && typeof m.elev_m === "number") return m.elev_m;
+    if (Math.abs(lon - 137.4) < 1.0 && Math.abs(lat - (-4.6)) < 1.0) return -4500;
+    if (Math.abs(lon - 77.45) < 1.0 && Math.abs(lat - 18.38) < 1.0) return -2500;
+    return fallback;
+  }
+
+  function toGlobeXYZ(lon, lat, lift = 0) {
+    const k = cfg.exag / M_PER_DEG;
+    const elev = getElev(lon, lat);
+    return new THREE.Vector3(lon, elev * k + lift, -lat);
+  }
+
+  G3.project = function (lon, lat) {
+    if (!camera || !renderer) return [0, 0];
+    const v = toGlobeXYZ(lon, lat, 0.02);
+    v.project(camera);
+    const w = renderer.domElement.clientWidth;
+    const h = renderer.domElement.clientHeight;
+    return [(v.x * 0.5 + 0.5) * w, (-(v.y * 0.5) + 0.5) * h];
+  };
+
+  G3.focus = function (lon, lat) {
+    G3.flyTo(lon, lat, 2.5);
+  };
+
   /* ---------- Balizas y Marcadores Planetarios ---------- */
   function createBeacons() {
     LOCATIONS.forEach(loc => {
@@ -495,10 +572,229 @@
     });
   }
 
+  /* ---------- Puntos de Control y Minerales 3D ---------- */
+  G3.updatePins = function (list) {
+    if (!pinsGroup) return;
+    while (pinsGroup.children.length > 0) {
+      const g = pinsGroup.children[0];
+      pinsGroup.remove(g);
+      g.traverse(child => {
+        if (child.isMesh) {
+          if (child.geometry) child.geometry.dispose();
+          if (child.material) {
+            if (Array.isArray(child.material)) child.material.forEach(m => m.dispose());
+            else child.material.dispose();
+          }
+        }
+      });
+    }
+    pins.length = 0;
+
+    (list || []).forEach(m => {
+      const g = new THREE.Group();
+      const pos = toGlobeXYZ(m.lon, m.lat, 0.002);
+      g.position.copy(pos);
+
+      const isMin = m.type === "mineral" || m.isMineral;
+      let c = PIN_COLORS[m.type] || 0xffffff;
+      if (isMin) {
+        const cat = m.mineral && m.mineral.category;
+        c = MINERAL_COLORS[cat] || 0x00d26a;
+      }
+
+      // Anillo de brillo en la base sobre el terreno
+      const ringGeo = new THREE.RingGeometry(0.12, 0.32, 16);
+      ringGeo.rotateX(-Math.PI / 2);
+      const ringMat = new THREE.MeshBasicMaterial({ color: c, side: THREE.DoubleSide, transparent: true, opacity: 0.65 });
+      const ring = new THREE.Mesh(ringGeo, ringMat);
+      ring.position.y = 0.01;
+      g.add(ring);
+
+      // Mástil vertical luminoso
+      const stemGeo = new THREE.CylinderGeometry(0.018, 0.018, 0.9, 8);
+      stemGeo.translate(0, 0.45, 0);
+      const stemMat = new THREE.MeshBasicMaterial({ color: c });
+      const stem = new THREE.Mesh(stemGeo, stemMat);
+      g.add(stem);
+
+      let head;
+      if (isMin) {
+        const octaGeo = new THREE.OctahedronGeometry(0.24, 0);
+        octaGeo.translate(0, 1.05, 0);
+        const octaMat = new THREE.MeshLambertMaterial({
+          color: c,
+          emissive: c,
+          emissiveIntensity: 0.55
+        });
+        head = new THREE.Mesh(octaGeo, octaMat);
+        g.userData = {
+          isMineral: true,
+          mineral: m.mineral || m,
+          diamond: head,
+          onClick: m.onClick,
+          label: m.label || (m.mineral && m.mineral.name)
+        };
+      } else {
+        let headGeo;
+        if (m.type === "meta") {
+          headGeo = new THREE.ConeGeometry(0.22, 0.45, 6);
+          headGeo.translate(0, 1.05, 0);
+        } else if (m.type === "refugio") {
+          headGeo = new THREE.CylinderGeometry(0.2, 0.22, 0.35, 6);
+          headGeo.translate(0, 1.0, 0);
+        } else if (m.type === "base") {
+          headGeo = new THREE.CylinderGeometry(0.22, 0.22, 0.35, 12);
+          headGeo.translate(0, 1.0, 0);
+        } else if (m.type === "hallazgo") {
+          headGeo = new THREE.OctahedronGeometry(0.22, 0);
+          headGeo.translate(0, 1.05, 0);
+        } else {
+          headGeo = new THREE.OctahedronGeometry(0.18, 0);
+          headGeo.translate(0, 1.0, 0);
+        }
+        const headMat = new THREE.MeshBasicMaterial({ color: c });
+        head = new THREE.Mesh(headGeo, headMat);
+        g.userData = {
+          isMineral: false,
+          target: m,
+          onClick: m.onClick,
+          label: m.label || m.name
+        };
+      }
+      g.add(head);
+
+      pinsGroup.add(g);
+      pins.push(g);
+    });
+  };
+
+  /* ---------- Rutas en Tubo 3D y Rover ---------- */
+  function buildGlobeTube(pts, color, radius, opacity = 1) {
+    if (!pts || pts.length < 2) return null;
+    const maxPts = 350;
+    const step = Math.max(1, Math.floor(pts.length / maxPts));
+    const v = [];
+    const lift = 0.004 * (cfg.exag / 6) + 0.002;
+    for (let i = 0; i < pts.length; i += step) {
+      v.push(toGlobeXYZ(pts[i][0], pts[i][1], lift));
+    }
+    const lastPt = pts[pts.length - 1];
+    v.push(toGlobeXYZ(lastPt[0], lastPt[1], lift));
+
+    const clean = [];
+    for (let i = 0; i < v.length; i++) {
+      if (i === 0 || clean[clean.length - 1].distanceTo(v[i]) > 0.0001) {
+        clean.push(v[i]);
+      }
+    }
+    if (clean.length < 2) return null;
+
+    const curve = new THREE.CatmullRomCurve3(clean);
+    const segs = Math.min(1000, clean.length * 3);
+    const geo = new THREE.TubeGeometry(curve, segs, radius, 6, false);
+    const mat = new THREE.MeshBasicMaterial({ color, transparent: opacity < 1, opacity });
+    const mesh = new THREE.Mesh(geo, mat);
+    if (routeGroup) routeGroup.add(mesh);
+    return mesh;
+  }
+
+  G3.update = function (st) {
+    if (!G3.ready) return;
+    lastState = st || {};
+    if (routeGroup) {
+      while (routeGroup.children.length > 0) {
+        const m = routeGroup.children[0];
+        routeGroup.remove(m);
+        if (m.geometry) m.geometry.dispose();
+        if (m.material) m.material.dispose();
+      }
+    }
+    activeRouteMesh = null;
+    doneRouteMesh = null;
+    secRouteMeshes = [];
+
+    if (lastState.route && lastState.route.length >= 2) {
+      activeRouteMesh = buildGlobeTube(lastState.route, 0x4d8dff, 0.0045, 0.95);
+    }
+    if (lastState.secondary && lastState.secondary.length) {
+      secRouteMeshes = lastState.secondary.map(p => buildGlobeTube(p, 0xa68bff, 0.0035, 0.85)).filter(Boolean);
+    }
+    G3.updatePins(lastState.pins || []);
+    G3.updatePos(lastState);
+  };
+
+  G3.updatePos = function (st) {
+    if (!G3.ready) return;
+    if (!st) st = lastState || {};
+    else if (lastState) Object.assign(lastState, st);
+
+    if (doneRouteMesh) {
+      if (routeGroup) routeGroup.remove(doneRouteMesh);
+      if (doneRouteMesh.geometry) doneRouteMesh.geometry.dispose();
+      if (doneRouteMesh.material) doneRouteMesh.material.dispose();
+      doneRouteMesh = null;
+    }
+    if (st.route && st.km > 0.05 && window.MR && window.MR.nearestKm) {
+      const i = window.MR.nearestKm(st.route, st.km);
+      const donePts = st.route.slice(0, Math.max(2, i + 1));
+      doneRouteMesh = buildGlobeTube(donePts, 0x46c882, 0.0055, 1.0);
+    }
+
+    if (!roverMesh && roverGroup) {
+      roverMesh = new THREE.Mesh(
+        new THREE.SphereGeometry(0.018, 16, 12),
+        new THREE.MeshBasicMaterial({ color: 0x1e64dc })
+      );
+      roverBeam = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.002, 0.002, 0.35, 8),
+        new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.75 })
+      );
+      roverBeam.geometry.translate(0, 0.175, 0);
+      roverGroup.add(roverMesh);
+      roverGroup.add(roverBeam);
+    }
+
+    if (st.pos && roverMesh) {
+      const p = toGlobeXYZ(st.pos[0], st.pos[1], 0.015);
+      roverMesh.position.copy(p);
+      roverBeam.position.copy(p);
+      if (st.color) roverMesh.material.color.set(st.color);
+      roverMesh.visible = roverBeam.visible = true;
+    } else if (roverMesh) {
+      roverMesh.visible = roverBeam.visible = false;
+    }
+  };
+
+  function getInteractiveObjects() {
+    const list = [];
+    beacons.forEach(b => {
+      b.traverse(c => {
+        if (c.isMesh) {
+          c._parentGroup = b;
+          list.push(c);
+        }
+      });
+    });
+    if (pinsGroup) {
+      pinsGroup.children.forEach(g => {
+        g.traverse(c => {
+          if (c.isMesh) {
+            c._parentGroup = g;
+            list.push(c);
+          }
+        });
+      });
+    }
+    return list;
+  }
+
   function setupInteraction() {
     if (!renderer) return;
     renderer.domElement.addEventListener("click", onGlobeClick);
     renderer.domElement.addEventListener("mousemove", onGlobeMouseMove);
+    renderer.domElement.addEventListener("mouseleave", () => {
+      if (window.MR && window.MR.hideTip) window.MR.hideTip();
+    });
   }
 
   function onGlobeClick(e) {
@@ -508,14 +804,21 @@
     mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
     raycaster.setFromCamera(mouse, camera);
 
-    const hit = raycaster.intersectObjects(beacons, true);
+    const hitList = getInteractiveObjects();
+    const hit = raycaster.intersectObjects(hitList, false);
     if (hit.length > 0) {
-      let root = hit[0].object;
-      while (root.parent && root.parent !== scene) root = root.parent;
-      if (root.userData && root.userData.loc) {
-        const loc = root.userData.loc;
+      const root = hit[0].object._parentGroup || hit[0].object;
+      const u = root.userData;
+      if (!u) return;
+      if (u.loc) {
+        const loc = u.loc;
         G3.flyTo(loc.lon, loc.lat, loc.hCam);
         showLocationCard(loc, e.clientX, e.clientY);
+      } else if (u.isMineral) {
+        if (u.onClick) u.onClick();
+        else if (window.MR && window.MR.openMineralModal) window.MR.openMineralModal(u.mineral);
+      } else if (u.target) {
+        if (u.onClick) u.onClick();
       }
     }
   }
@@ -527,8 +830,32 @@
     mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
     raycaster.setFromCamera(mouse, camera);
 
-    const hit = raycaster.intersectObjects(beacons, true);
-    renderer.domElement.style.cursor = hit.length > 0 ? "pointer" : "default";
+    const hitList = getInteractiveObjects();
+    const hit = raycaster.intersectObjects(hitList, false);
+    if (hit.length > 0) {
+      renderer.domElement.style.cursor = "pointer";
+      const root = hit[0].object._parentGroup || hit[0].object;
+      const u = root.userData;
+      if (u && window.MR && window.MR.showTip) {
+        if (u.loc) {
+          const hexCol = '#' + u.loc.color.toString(16).padStart(6, '0');
+          window.MR.showTip(`<b>${u.loc.name}</b><br><span style="color:${hexCol};font-size:11px;">${u.loc.sub}</span>`, e.clientX, e.clientY);
+        } else if (u.isMineral) {
+          const min = u.mineral || {};
+          const cat = min.category || "Depósito Mineral";
+          const catCol = MINERAL_COLORS[cat] ? ('#' + MINERAL_COLORS[cat].toString(16).padStart(6, '0')) : "#00d26a";
+          window.MR.showTip(`<b>${min.name || u.label}</b><br><span style="color:${catCol};font-size:11px;font-weight:600;">${cat}</span>${min.formula ? `<br><i style="font-size:11px;opacity:0.85;">${min.formula}</i>` : ''}`, e.clientX, e.clientY);
+        } else if (u.target) {
+          const t = u.target;
+          const typeName = t.type ? (t.type.charAt(0).toUpperCase() + t.type.slice(1)) : 'Punto de Control';
+          const pCol = PIN_COLORS[t.type] ? ('#' + PIN_COLORS[t.type].toString(16).padStart(6, '0')) : "var(--accent)";
+          window.MR.showTip(`<b>${t.label || t.name || 'Punto de Control'}</b><br><span style="color:${pCol};font-size:11px;font-weight:600;">${typeName}</span>`, e.clientX, e.clientY);
+        }
+      }
+    } else {
+      renderer.domElement.style.cursor = "default";
+      if (window.MR && window.MR.hideTip) window.MR.hideTip();
+    }
   }
 
   function showLocationCard(loc, x, y) {
@@ -708,14 +1035,23 @@
   /* ---------- Navegación y Vuelo (flyTo) ---------- */
   G3.flyTo = function (lon, lat, h, dur = 1600) {
     if (!controls) return;
+    const actualDur = (window.MR && window.MR.reduceMotion && window.MR.reduceMotion()) ? 0 : dur;
     const t1 = new THREE.Vector3(lon, 0, -lat);
     const p1 = new THREE.Vector3(lon, h, -lat + h * 0.7);
+    if (actualDur === 0) {
+      controls.target.copy(t1);
+      camera.position.copy(p1);
+      camera.lookAt(t1);
+      controls.update();
+      fly = null;
+      return;
+    }
     fly = {
       t0: controls.target.clone(),
       p0: camera.position.clone(),
       t1, p1,
       s: performance.now(),
-      d: dur
+      d: actualDur
     };
   };
 
@@ -726,7 +1062,15 @@
 
   G3.setExag = function (val) {
     cfg.exag = Math.max(1, Math.min(30, val));
+    beacons.forEach(b => {
+      if (b.userData && b.userData.loc) {
+        b.position.y = b.userData.loc.elev * (cfg.exag / M_PER_DEG);
+      }
+    });
     G3.resetTerrain();
+    if (lastState) {
+      G3.update(lastState);
+    }
   };
 
   G3.setBaseLayer = function (layerId) {
@@ -764,6 +1108,9 @@
     G3.resize();
     renderLayersUI();
     updateTiles();
+    if (lastState) {
+      G3.update(lastState);
+    }
 
     const loop = (now) => {
       if (!running) return;
@@ -772,9 +1119,13 @@
         const e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
         controls.target.lerpVectors(fly.t0, fly.t1, e);
         camera.position.lerpVectors(fly.p0, fly.p1, e);
-        if (k >= 1) fly = null;
+        if (k >= 1) {
+          fly = null;
+          controls.update();
+        }
+      } else {
+        controls.update();
       }
-      controls.update();
 
       // Limitar a los límites equirectangulares
       controls.target.x = Math.max(-180, Math.min(180, controls.target.x));
@@ -792,6 +1143,27 @@
           b.userData.diamond.position.y = 1.8 + Math.sin(tSec * 2 + idx) * 0.12;
         }
       });
+
+      // Animación de cristales minerales y escala adaptativa de pines
+      const pinScale = Math.max(0.035, Math.min(1.2, dist * 0.045));
+      if (pinsGroup) {
+        pinsGroup.children.forEach((p, idx) => {
+          p.scale.set(pinScale, pinScale, pinScale);
+          if (p.userData && p.userData.diamond) {
+            p.userData.diamond.rotation.y = tSec + idx * 0.7;
+          }
+        });
+      }
+
+      // Pulso del haz del rover
+      if (roverBeam && roverBeam.visible) {
+        roverBeam.material.opacity = 0.55 + Math.sin(now * 0.006) * 0.25;
+      }
+
+      // Reposicionar tarjeta emergente interactiva si está abierta
+      if (window.MR && window.MR.UI && window.MR.UI.repositionPointUI) {
+        window.MR.UI.repositionPointUI();
+      }
 
       // Streaming de teselas dinámico al cambiar posición/zoom
       const zoom = chooseZoom();

@@ -332,6 +332,10 @@
         }
       });
 
+      if (window.MR && window.MR.UI && window.MR.UI.repositionPointUI) {
+        window.MR.UI.repositionPointUI();
+      }
+
       renderer.render(scene, camera);
       requestAnimationFrame(loop);
     };
@@ -352,5 +356,14 @@
     const p = toXYZ(lon, lat, 0);
     controls.target.copy(p);
     camera.position.set(p.x - 26, p.y + 34, p.z + 40);
+  };
+
+  S3.project = function (lon, lat) {
+    if (!camera || !renderer) return [0, 0];
+    const p = toXYZ(lon, lat, 0.5);
+    p.project(camera);
+    const w = renderer.domElement.clientWidth;
+    const h = renderer.domElement.clientHeight;
+    return [(p.x * 0.5 + 0.5) * w, (-(p.y * 0.5) + 0.5) * h];
   };
 })();

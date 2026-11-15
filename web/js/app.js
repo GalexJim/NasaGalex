@@ -545,8 +545,10 @@
         flyToMineral(m);
       });
       card.addEventListener("click", () => {
-        if (S.view === "3d") {
+        if (S.view === "3d" && MR.Scene3D && MR.Scene3D.ready) {
           MR.Scene3D.focus(m.lon, m.lat);
+        } else if (S.view === "globe" && MR.Globe3D && MR.Globe3D.ready) {
+          MR.Globe3D.flyTo(m.lon, m.lat, 2.5);
         } else {
           MR.Map.centerOn(m.lon, m.lat, 2.5);
         }
@@ -570,11 +572,17 @@
   }
 
   function flyToMineral(m) {
-    if (S.view !== "3d") {
-      setView("3d");
-    }
-    if (MR.Scene3D && MR.Scene3D.ready) {
-      MR.Scene3D.flyTo(m.lon, m.lat, 0.8);
+    if (S.view === "globe") {
+      if (MR.Globe3D && MR.Globe3D.ready) {
+        MR.Globe3D.flyTo(m.lon, m.lat, 2.5);
+      }
+    } else {
+      if (S.view !== "3d") {
+        setView("3d");
+      }
+      if (MR.Scene3D && MR.Scene3D.ready) {
+        MR.Scene3D.focus(m.lon, m.lat);
+      }
     }
   }
 
@@ -990,7 +998,18 @@
     }
     MR.Map.setMarkers(list);
     T.findings.forEach(f => (f.fresh = false));
-    if (S.view === "3d") MR.Scene3D.updatePins(list.filter(m => m.type !== "medida"));
+    if (S.view === "3d" && MR.Scene3D && MR.Scene3D.ready) {
+      MR.Scene3D.updatePins(list.filter(m => m.type !== "medida"));
+    } else if (S.view === "globe" && MR.Globe3D && MR.Globe3D.ready) {
+      const globeList = [...list.filter(m => m.type !== "medida")];
+      const otherMinerals = (window.MARS_MINERALS || []).filter(m => m.region !== (currentRegion || "gale"));
+      otherMinerals.forEach(m => {
+        if (!globeList.some(x => x.id === m.id)) {
+          globeList.push({ id: m.id, type: "mineral", lon: m.lon, lat: m.lat, label: m.name, isMineral: true, mineral: m, onClick: () => openMineralModal(m) });
+        }
+      });
+      MR.Globe3D.updatePins(globeList);
+    }
   }
 
   /* =====================================================
@@ -1035,7 +1054,14 @@
   }
   function repositionPointUI() {
     if (!anchor) return;
-    const [x, y] = MR.Map.project(anchor.ll[0], anchor.ll[1]);
+    let x = 0, y = 0;
+    if (S.view === "globe" && MR.Globe3D && MR.Globe3D.project) {
+      [x, y] = MR.Globe3D.project(anchor.ll[0], anchor.ll[1]);
+    } else if (S.view === "3d" && MR.Scene3D && MR.Scene3D.project) {
+      [x, y] = MR.Scene3D.project(anchor.ll[0], anchor.ll[1]);
+    } else if (MR.Map && MR.Map.project) {
+      [x, y] = MR.Map.project(anchor.ll[0], anchor.ll[1]);
+    }
     const el = anchor.el, st = $("stage"), w = el.offsetWidth, h = el.offsetHeight;
     let lx = x + 14, ly = y - 10;
     if (lx + w > st.clientWidth - 90) lx = x - w - 14;
@@ -1444,7 +1470,13 @@
       if (now - lastDraw > 60) {
         lastDraw = now; const p = curPos();
         MR.Map.drawDone(T.route, T.km, p); MR.Map.setAstronaut(p, T.crew.color, T.crew.short);
-        if (S.view === "2d") MR.Map.keepInView(p[0], p[1]); else MR.Scene3D.updatePos({ route: T.route, km: T.km, pos: p, color: T.crew.color });
+        if (S.view === "2d") {
+          MR.Map.keepInView(p[0], p[1]);
+        } else if (S.view === "3d") {
+          if (MR.Scene3D && MR.Scene3D.ready) MR.Scene3D.updatePos({ route: T.route, km: T.km, pos: p, color: T.crew.color });
+        } else if (S.view === "globe") {
+          if (MR.Globe3D && MR.Globe3D.ready) MR.Globe3D.updatePos({ route: T.route, km: T.km, pos: p, color: T.crew.color });
+        }
         renderStatus(); renderLive();
       }
       if (now - lastProfile > 700) { lastProfile = now; renderProfile(); if (S.panel === "misiones") renderPanel(); }
@@ -1655,7 +1687,11 @@
         <div class="row-actions">${m.status === "propuesta" ? '<button class="btn primary" data-o>Ver briefing</button>' : ""}<button class="btn ghost" data-c>Ver en el mapa</button></div>`;
       d.querySelector("b").textContent = m.name;
       const o = d.querySelector("[data-o]"); o && o.addEventListener("click", () => openSecondaryBriefing(m));
-      d.querySelector("[data-c]").addEventListener("click", () => { if (S.view === "3d") MR.Scene3D.focus(m.lon, m.lat); else MR.Map.centerOn(m.lon, m.lat, 2.5); });
+      d.querySelector("[data-c]").addEventListener("click", () => {
+        if (S.view === "3d") MR.Scene3D.focus(m.lon, m.lat);
+        else if (S.view === "globe" && MR.Globe3D) MR.Globe3D.flyTo(m.lon, m.lat, 3.0);
+        else MR.Map.centerOn(m.lon, m.lat, 2.5);
+      });
       list.appendChild(d);
     });
   }
@@ -1681,7 +1717,11 @@
       d.appendChild(meta);
       if (m.ll) {
         const l = document.createElement("button"); l.className = "loc"; l.textContent = "Ver en el mapa"; l.type = "button";
-        l.addEventListener("click", () => { if (S.view === "3d") MR.Scene3D.focus(m.ll[0], m.ll[1]); else MR.Map.centerOn(m.ll[0], m.ll[1], 2.8); });
+        l.addEventListener("click", () => {
+          if (S.view === "3d") MR.Scene3D.focus(m.ll[0], m.ll[1]);
+          else if (S.view === "globe" && MR.Globe3D) MR.Globe3D.flyTo(m.ll[0], m.ll[1], 3.0);
+          else MR.Map.centerOn(m.ll[0], m.ll[1], 2.8);
+        });
         d.appendChild(document.createTextNode(" ")); d.appendChild(l);
       }
       box.appendChild(d);
@@ -1769,7 +1809,12 @@
   function renderProfile() {
     if (T.mode !== "walk") return;
     MR.profileChart($("profile"), T.route, { posKm: T.km, stages: T.stages, hazards: T.hazards,
-      onPick: p => { if (S.view === "3d") MR.Scene3D.focus(p[0], p[1]); else MR.Map.centerOn(p[0], p[1], 3); } });
+      onPick: p => {
+        if (S.view === "3d") MR.Scene3D.focus(p[0], p[1]);
+        else if (S.view === "globe" && MR.Globe3D) MR.Globe3D.flyTo(p[0], p[1], 3);
+        else MR.Map.centerOn(p[0], p[1], 3);
+      }
+    });
   }
   function renderLive(flash) {
     if (T.mode !== "walk") return;
@@ -1847,6 +1892,7 @@
         MR.Globe3D.init();
         MR.Globe3D.start();
         MR.Globe3D.goToRegion(currentRegion);
+        update3d();
       }
     } else {
       if (MR.Scene3D && MR.Scene3D.ready) MR.Scene3D.stop();
@@ -1855,15 +1901,39 @@
   }
   function sync3dTexture() { if (MR.Scene3D.ready) MR.Scene3D.setTexture($("basemap"), S.layer !== "none" ? $("overlay") : null, S.opacity); }
   function update3d() {
-    if (!MR.Scene3D || !MR.Scene3D.ready) return;
     const pins = [];
     filteredObjectives().forEach(o => pins.push({ type: o.type, lon: o.lon, lat: o.lat, label: o.name, onClick: () => openObjective(o) }));
     const minerals = getRegionMinerals();
     minerals.forEach(m => pins.push({ type: "mineral", lon: m.lon, lat: m.lat, isMineral: true, mineral: m, label: m.name, onClick: () => openMineralModal(m) }));
     T.findings.forEach(f => pins.push({ type: "hallazgo", lon: f.lon, lat: f.lat, label: f.typeName, onClick: () => openFindingCard(f) }));
     T.missions.forEach(m => pins.push({ type: "secundaria", lon: m.lon, lat: m.lat, label: m.name, onClick: () => openMissionCard(m) }));
-    MR.Scene3D.update({ route: activeRoute(), km: T.km, pos: curPos(), color: T.crew.color, pins,
-      secondary: T.missions.filter(m => m.path && m.status === "aceptada").map(m => m.path) });
+    const st = {
+      route: activeRoute(),
+      km: T.km,
+      pos: curPos(),
+      color: T.crew.color,
+      pins,
+      secondary: T.missions.filter(m => m.path && m.status === "aceptada").map(m => m.path)
+    };
+    if (MR.Scene3D && MR.Scene3D.ready) MR.Scene3D.update(st);
+    if (MR.Globe3D && MR.Globe3D.ready) {
+      const globePins = [...pins];
+      const otherMinerals = (window.MARS_MINERALS || []).filter(m => m.region !== (currentRegion || "gale"));
+      otherMinerals.forEach(m => {
+        if (!globePins.some(x => x.id === m.id)) {
+          globePins.push({
+            type: "mineral",
+            lon: m.lon,
+            lat: m.lat,
+            isMineral: true,
+            mineral: m,
+            label: m.name,
+            onClick: () => openMineralModal(m)
+          });
+        }
+      });
+      MR.Globe3D.update({ ...st, pins: globePins });
+    }
   }
 
   /* =====================================================
