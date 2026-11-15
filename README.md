@@ -94,10 +94,76 @@ REMS registra el ciclo diurno en dos momentos de la misión: temperatura del air
 
 ![REMS](maps/rems_environment.png)
 
-## Estructura
+## Aplicación Web Interactiva — GaleX
 
+GaleX es una aplicación **100% web, offline-first** con backend Python local para planificación predictiva y simulación EVA interactiva en Marte.
+
+### Inicio Rápido en un Paso
+
+- **Linux / macOS:**
+  ```bash
+  ./run_galex.sh
+  ```
+- **Windows:**
+  ```bat
+  run_galex.bat
+  ```
+- **Manual (Cualquier plataforma):**
+  ```bash
+  python3 backend/server.py
+  # Abre http://127.0.0.1:8000 en tu navegador
+  ```
+
+### Características de GaleX
+
+1. **Multirregión (Gale y Jezero):**
+   - **Cráter Gale (Curiosity / MSL):** Mosaicos de 1200 × 1200 celdas (44 m/celda), Random Forest determinista, 12 capas ráster, refugios Bradbury Landing y Base Mount Sharp.
+   - **Cráter Jezero (Perseverance / Mars 2020):** Bounding box georreferenciado, refugios Octavia Butler Landing y Delta Front, con etiquetado de honestidad científica (`NO DISPONIBLE` en capas no cubiertas localmente).
+2. **Tres Perfiles de Ruta Multicriterio:**
+   - **Segura:** Minimiza riesgo ambiental, pendientes > 15° y exige reserva de oxígeno > 20% al llegar a un refugio verificado.
+   - **Rápida:** Minimiza el tiempo de exposición EVA mediante cinemática de Tobler ($v = 6 \cdot e^{-3.5|grade+0.05|} \cdot 0.55$).
+   - **Científica:** Maximiza visitas a objetivos geológicos (CRISM, minerales hidratados, sedimentos lacustres).
+3. **Restricciones Duras y Soporte Vital:**
+   - Obligatoriedad de refugio presurizado verificado al final del trayecto (rechazo automático si la distancia al refugio > 1.0 km).
+   - Monitoreo en tiempo real de consumo de $O_2$, batería (Rover presurizado vs Traje EVA) y dosis de radiación ionizante acumulada.
+4. **Relieve Planetario 3D (Motor `mars-terreno-3d`):**
+   - Coordenadas planetocéntricas ($X = lon$, $Z = -lat$, $Y = elev \cdot exag / 59200$).
+   - Streaming dinámico de teselas WMTS MOLA de NASA Mars Trek con zoom por niveles de detalle (LOD 0–6).
+   - Modo de contingencia sin conexión: relieve procedural FBM + rampa hipsométrica + muestreo del DEM local de Gale.
+   - Controles cinemáticos `flyTo` para Gale, Jezero, Olympus Mons, Valles Marineris y Vista Global.
+5. **Red Meteorológica MDA y Replanificación:**
+   - Red de estaciones meteorológicas simuladas (`MDA-GALE-01` a `MDA-GALE-22`).
+   - Escenario demostrativo Sol 1 (11:30 LTST): tormenta de viento ($28.4\text{ m/s}$) y opacidad ($\tau = 2.15$) en `MDA-GALE-14` (Bagnold Dunes) con alerta explicable y replanificación en 1 clic.
+6. **Persistencia SQLite y Bilingüe:**
+   - Base de datos relacional `mars_route.sqlite` (`reporte`, `hallazgo`, `mensaje`, `explorador`, `mision`).
+   - Botón de alternancia de idioma Español (ES) / Inglés (EN).
+
+### Pruebas de Humo y Verificación
+
+```bash
+python3 -m pytest tests/test_smoke.py
+```
+Ejecuta 7 pruebas exhaustivas que validan contratos de dominio, consistencia de configuraciones de Gale y Jezero, perfiles multicriterio, persistencia SQLite, escenario simulado y cálculo de rutas con restricciones de refugio.
+
+## Estructura
 ```
 config/mission.yaml          parámetros de la misión
+config/regions/              configuraciones regionales (Gale y Jezero)
+config/route_profiles.yaml   perfiles multicriterio y restricciones duras
+data/simulated/              escenario de alertas meteorológicas MDA
+src/marsroute/domain.py      modelos de dominio y contratos de datos
+src/marsroute/multicriteria.py planificador A* multicriterio y recursos
+src/marsroute/storage.py     almacén relacional SQLite
+backend/server.py            servidor HTTP/JSON multihilo
+backend/schema.sql           esquema SQLite (reporte, hallazgo, etc.)
+web/index.html               interfaz web principal
+web/css/app.css              estilos responsivos y accesibles
+web/js/scene3d.js            motor 3D de teselas planetarias MOLA
+web/js/app.js                controlador de interfaz, simulación y alertas
+web/js/core.js               algoritmos de soporte y modelos de velocidad
+tests/test_smoke.py          suite de pruebas de humo
+run_galex.sh / run_galex.bat scripts de inicio en un clic
+```
 scripts/download_data.py     descarga y recorte de capas
 scripts/build_layers.py      construcción de la grilla de capas
 scripts/prepare_rems.py      parseo de REMS a CSV
