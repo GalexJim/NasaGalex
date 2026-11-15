@@ -1,0 +1,56 @@
+profiles:
+  segura:
+    id: segura
+    name: Ruta Segura (Bajo Riesgo y Máxima Reserva)
+    risk_weight: 6.0
+    slope_weight: 5.0
+    max_slope_deg: 20.0
+    caution_slope_deg: 8.0
+    min_traversability: 0.0
+    science_reward_weight: 0.5
+    speed_factor: 0.85
+    min_reserve_pct: 25.0
+    description: >
+      Prioriza la integridad física del explorador y el margen de seguridad de los trajes EVA.
+      Evita pendientes pronunciadas y terrenos de baja transitabilidad. Exige al menos 25%
+      de reserva de oxígeno y batería al llegar al refugio.
+
+  rapida:
+    id: rapida
+    name: Ruta Rápida (Mínimo Tiempo EVA y Distancia)
+    risk_weight: 1.5
+    slope_weight: 1.5
+    max_slope_deg: 22.0
+    caution_slope_deg: 10.0
+    min_traversability: 0.0
+    science_reward_weight: 0.0
+    speed_factor: 1.15
+    min_reserve_pct: 15.0
+    description: >
+      Minimiza el tiempo de exposición ambiental siguiendo el corredor geométrico más veloz.
+      Acepta pendientes de hasta 22° si la cinemática de marcha lo permite.
+
+  cientifica:
+    id: cientifica
+    name: Ruta Científica (Máximo Retorno de Muestras y Hallazgos)
+    risk_weight: 3.5
+    slope_weight: 3.0
+    max_slope_deg: 20.0
+    caution_slope_deg: 8.0
+    min_traversability: 0.0
+    science_reward_weight: 4.0
+    speed_factor: 0.95
+    min_reserve_pct: 20.0
+    description: >
+      Desvía la trayectoria hacia zonas con huellas espectrales CRISM, minerales hidratados
+      o depósitos sedimentarios de alto valor geológico, manteniendo la obligación de terminar
+      en un refugio seguro con reserva mínima del 20%.
+
+hard_constraints:
+  require_final_shelter: true
+  max_eva_hours: 8.0
+  max_radiation_dose_msv: 5.0
+  min_oxygen_reserve_pct: 15.0
+  min_battery_reserve_pct: 15.0
+  max_wind_speed_ms: 25.0
+  max_dust_opacity_tau: 1.8

@@ -1,0 +1,28 @@
+{
+ "features": [
+  {
+   "lon": 137.199996948,
+   "lat": -5,
+   "type": "Hydrous Mineral Detection",
+   "instrument": "OMEGA"
+  },
+  {
+   "lon": 138.199996948,
+   "lat": -5.30000019073,
+   "type": "Hydrous Mineral Detection",
+   "instrument": "OMEGA"
+  },
+  {
+   "lon": 137.199996948,
+   "lat": -5,
+   "type": "Hydrous Mineral Detection",
+   "instrument": "CRISM"
+  },
+  {
+   "lon": 138.199996948,
+   "lat": -5.30000019073,
+   "type": "Hydrous Mineral Detection",
+   "instrument": "CRISM"
+  }
+ ]
+}

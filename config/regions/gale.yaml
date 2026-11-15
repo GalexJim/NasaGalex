@@ -1,0 +1,43 @@
+id: gale
+name: Cráter Gale — Mount Sharp (Aeolis Mons)
+crs: EPSG:104905
+bbox: [137.18, -5.45, 138.08, -4.55]
+center: [137.63, -5.00]
+resolution_m: 44.0
+grid_size: 1200
+default_start: [137.4416, -4.5895]
+default_shelter: [137.8599, -5.3709]
+description: >
+  Zona de exploración principal de Curiosity (MSL). Presenta estratigrafía sedimentaria
+  en Mount Sharp con depósitos de arcillas, sulfatos y huellas espectrales CRISM.
+available_layers:
+  - dem
+  - slope
+  - roughness
+  - texture
+  - gradient
+  - themis_day
+  - themis_night
+  - viking
+  - crism
+  - minerals
+  - traversability
+shelters:
+  - id: shelter-gale-mount-sharp
+    name: Estación Base Mount Sharp
+    lon: 137.8599
+    lat: -5.3709
+    capacity: 6
+    oxygen_reserves_h: 72.0
+    power_reserves_h: 96.0
+  - id: shelter-gale-bradbury
+    name: Refugio Bradbury Landing
+    lon: 137.4416
+    lat: -4.5895
+    capacity: 4
+    oxygen_reserves_h: 48.0
+    power_reserves_h: 48.0
+mda_grid:
+  rows: 6
+  cols: 6
+  prefix: MDA-GALE

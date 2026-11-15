@@ -1,0 +1,24 @@
+{
+  "rems": {
+    "sol_100": {
+      "records": 35344,
+      "air_temp_min_k": 207.27,
+      "air_temp_max_k": 272.69,
+      "pressure_mean_pa": 839.9043946329914,
+      "pressure_min_pa": 771.18,
+      "pressure_max_pa": 866.2,
+      "uv_max_w_m2": 16.57,
+      "humidity_max_pct": 5.93
+    },
+    "sol_4500": {
+      "records": 34464,
+      "air_temp_min_k": 194.41,
+      "air_temp_max_k": 253.98,
+      "pressure_mean_pa": 842.67392147806,
+      "pressure_min_pa": 811.96,
+      "pressure_max_pa": 861.74,
+      "uv_max_w_m2": 7.78,
+      "humidity_max_pct": 22.61
+    }
+  }
+}

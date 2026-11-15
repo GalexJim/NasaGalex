@@ -1,0 +1,849 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<?xml-model href="https://pds.nasa.gov/pds4/pds/v1/PDS4_PDS_1I00.sch" schematypens="http://purl.oclc.org/dsdl/schematron" ?>
+<Product_Observational xmlns="http://pds.nasa.gov/pds4/pds/v1" xmlns:pds="http://pds.nasa.gov/pds4/pds/v1" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://pds.nasa.gov/pds4/pds/v1     https://pds.nasa.gov/pds4/pds/v1/PDS4_PDS_1I00.xsd">
+  <Identification_Area>
+    <logical_identifier>urn:nasa:pds:msl_rems:data_calibrated:rme_796931302rnv45000000000_______p1</logical_identifier>
+    <version_id>1.0</version_id>
+    <title>MARS SCIENCE LABORATORY ROVER ENVIRONMENTAL MONITORING STATION</title>
+    <information_model_version>1.18.0.0</information_model_version>
+    <product_class>Product_Observational</product_class>
+    <Modification_History>
+      <Modification_Detail>
+        <modification_date>2026-02-02</modification_date>
+        <version_id>1.0</version_id>
+        <description>This label was modified to convert to PDS4.</description>
+      </Modification_Detail>
+    </Modification_History>
+  </Identification_Area>
+  <Observation_Area>
+    <Time_Coordinates>
+      <start_date_time>2025-04-03T06:54:37.021Z</start_date_time>
+      <stop_date_time>2025-04-04T07:32:57.860Z</stop_date_time>
+    </Time_Coordinates>
+    <Primary_Result_Summary>
+      <purpose>Science</purpose>
+      <processing_level>Calibrated</processing_level>
+      <Science_Facets>
+        <domain>Atmosphere</domain>
+        <discipline_name>Atmospheres</discipline_name>
+        <facet1>Structure</facet1>
+      </Science_Facets>
+    </Primary_Result_Summary>
+    <Investigation_Area>
+      <name>MARS SCIENCE LABORATORY</name>
+      <type>Mission</type>
+      <Internal_Reference>
+        <lid_reference>urn:nasa:pds:context:investigation:mission.mars_science_laboratory</lid_reference>
+        <reference_type>data_to_investigation</reference_type>
+      </Internal_Reference>
+    </Investigation_Area>
+    <Observing_System>
+      <name>MSL</name>
+      <Observing_System_Component>
+        <name>ROVER ENVIRONMENTAL MONITORING STATION</name>
+        <type>Instrument</type>
+        <Internal_Reference>
+          <lid_reference>urn:nasa:pds:context:instrument:rems.msl</lid_reference>
+          <reference_type>is_instrument</reference_type>
+        </Internal_Reference>
+      </Observing_System_Component>
+      <Observing_System_Component>
+        <name>MARS SCIENCE LABORATORY</name>
+        <type>Host</type>
+        <Internal_Reference>
+          <lid_reference>urn:nasa:pds:context:instrument_host:spacecraft.msl</lid_reference>
+          <reference_type>is_instrument_host</reference_type>
+        </Internal_Reference>
+      </Observing_System_Component>
+    </Observing_System>
+    <Target_Identification>
+      <name>MARS</name>
+      <type>Planet</type>
+      <Internal_Reference>
+        <lid_reference>urn:nasa:pds:context:target:planet.mars</lid_reference>
+        <reference_type>data_to_target</reference_type>
+      </Internal_Reference>
+    </Target_Identification>
+  </Observation_Area>
+  <Reference_List>
+    <Internal_Reference>
+      <lid_reference>urn:nasa:pds:msl_rems:document:rems_rdr_sis</lid_reference>
+      <reference_type>data_to_document</reference_type>
+      <comment>Data set catalog file</comment>
+    </Internal_Reference>
+    <Internal_Reference>
+      <lid_reference>urn:nasa:pds:msl_rems:document:rems_rdr_volsis</lid_reference>
+      <reference_type>data_to_document</reference_type>
+      <comment>Data set catalog file</comment>
+    </Internal_Reference>
+    <Internal_Reference>
+      <lid_reference>urn:nasa:pds:msl_rems:document:rems_envrdr_ds</lid_reference>
+      <reference_type>data_to_document</reference_type>
+      <comment>Data set catalog file</comment>
+    </Internal_Reference>
+  </Reference_List>
+  <File_Area_Observational>
+    <File>
+      <file_name>RME_796931302RNV45000000000_______P1.TAB</file_name>
+      <local_identifier>RME_796931302RNV45000000000_______P1_file</local_identifier>
+      <creation_date_time>2025-10-20T20:43:14.575Z</creation_date_time>
+      <records>34464</records>
+    </File>
+    <Table_Character>
+      <local_identifier>RME_796931302RNV45000000000_______P1_table_character</local_identifier>
+      <offset unit="byte">0</offset>
+      <records>34464</records>
+      <record_delimiter>Carriage-Return Line-Feed</record_delimiter>
+      <Record_Character>
+        <fields>71</fields>
+        <groups>0</groups>
+        <record_length unit="byte">659</record_length>
+        <Field_Character>
+          <name>TIMESTAMP</name>
+          <field_number>1</field_number>
+          <field_location unit="byte">1</field_location>
+          <data_type>ASCII_Integer</data_type>
+          <field_length unit="byte">10</field_length>
+          <unit>SECOND</unit>
+          <description>Number of seconds since noon 1-Jan-2000</description>
+          </Field_Character>
+        <Field_Character>
+          <name>LMST</name>
+          <field_number>2</field_number>
+          <field_location unit="byte">13</field_location>
+          <data_type>ASCII_String</data_type>
+          <field_length unit="byte">18</field_length>
+          <description>Local Mean Solar Time. It is in the format SSSSSMHH:MM:SS.sss where: SS - Sol number (00000-99999) M - sol/time separator HH - hour (0-23) MM - minute (0-59) SS - second (0-59) sss - fractions of second (000-999)</description>
+          </Field_Character>
+        <Field_Character>
+          <name>LTST</name>
+          <field_number>3</field_number>
+          <field_location unit="byte">34</field_location>
+          <data_type>ASCII_String</data_type>
+          <field_length unit="byte">14</field_length>
+          <description>Local True Solar Time with respect to the rover position. It is in the format SSSSS HH:MM:SS.sss where: SS - Sol number (00000-99999) HH - hour (0-23) MM - minute (0-59) SS - second (0-59)</description>
+          </Field_Character>
+        <Field_Character>
+          <name>BOOM1_BOARD1_B_LONG</name>
+          <field_number>4</field_number>
+          <field_location unit="byte">50</field_location>
+          <data_type>ASCII_Real</data_type>
+          <field_length unit="byte">10</field_length>
+          <description>Wind sensor longitudinal differential thermal conductance for Boom 1 Board 1</description>
+          <Special_Constants>
+            <unknown_constant>-9.990E+02</unknown_constant>
+          </Special_Constants>
+        </Field_Character>
+        <Field_Character>
+          <name>BOOM1_BOARD1_B_TRANS</name>
+          <field_number>5</field_number>
+          <field_location unit="byte">61</field_location>
+          <data_type>ASCII_Real</data_type>
+          <field_length unit="byte">10</field_length>
+          <description>Wind sensor transversal differential thermal conductance for Boom 1 Board 1</description>
+          <Special_Constants>
+            <unknown_constant>-9.990E+02</unknown_constant>
+          </Special_Constants>
+        </Field_Character>
+        <Field_Character>
+          <name>BOOM1_BOARD2_B_LONG</name>
+          <field_number>6</field_number>
+          <field_location unit="byte">72</field_location>
+          <data_type>ASCII_Real</data_type>
+          <field_length unit="byte">10</field_length>
+          <description>Wind sensor longitudinal differential thermal conductance for Boom 1 Board 2</description>
+          <Special_Constants>
+            <unknown_constant>-9.990E+02</unknown_constant>
+          </Special_Constants>
+        </Field_Character>
+        <Field_Character>
+          <name>BOOM1_BOARD2_B_TRANS</name>
+          <field_number>7</field_number>
+          <field_location unit="byte">83</field_location>
+          <data_type>ASCII_Real</data_type>
+          <field_length unit="byte">10</field_length>
+          <description>Wind sensor transversal differential thermal conductance for Boom 1 Board 2</description>
+          <Special_Constants>
+            <unknown_constant>-9.990E+02</unknown_constant>
+          </Special_Constants>
+        </Field_Character>
+        <Field_Character>
+          <name>BOOM1_BOARD3_B_LONG</name>
+          <field_number>8</field_number>
+          <field_location unit="byte">94</field_location>
+          <data_type>ASCII_Real</data_type>
+          <field_length unit="byte">10</field_length>
+          <description>Wind sensor longitudinal differential thermal conductance for Boom 1 Board 3</description>
+          <Special_Constants>
+            <unknown_constant>-9.990E+02</unknown_constant>
+          </Special_Constants>
+        </Field_Character>
+        <Field_Character>
+          <name>BOOM1_BOARD3_B_TRANS</name>
+          <field_number>9</field_number>
+          <field_location unit="byte">105</field_location>
+          <data_type>ASCII_Real</data_type>
+          <field_length unit="byte">10</field_length>
+          <description>Wind sensor transversal differential thermal conductance for Boom 1 Board 3</description>
+          <Special_Constants>
+            <unknown_constant>-9.990E+02</unknown_constant>
+          </Special_Constants>
+        </Field_Character>
+        <Field_Character>
+          <name>WS_BOOM1_CONFIDENCE_LEVEL</name>
+          <field_number>10</field_number>
+          <field_location unit="byte">117</field_location>
+          <data_type>ASCII_String</data_type>
+          <field_length unit="byte">8</field_length>
+          <description>String representing the confidence level for the wind sensor; 0 = bad; 1 = good; X = unknown; (byte 0 is on the left end) - Byte 0: ASIC temperature; 0 = less than -50C; 1 = more than -50C; - Byte 1: ASIC power supply range; 0 = out of range; 1 = in range (V = [4.83 - 5.03]); - Bytes 2-3: ASIC noise; 00 = electronic noise (no valid data); 01 = frequent electronic noise (warning); 10 = electronic noise (warning); 11 = No electronic noise; - Byte 4: Wind Sensor gain characterized; 0 = no fully characterized (gain other than 0x30); 1 = characterized (gain 0x30); - Byte 5: Rover movement; 0 = moving; 1 = still; - Byte 6: Wind Sensor correctly configured based on air temperature; 0 = wrong configuration; 1 = good configuration;</description>
+          <Special_Constants>
+            <unknown_constant>XXXXXXX</unknown_constant>
+          </Special_Constants>
+        </Field_Character>
+        <Field_Character>
+          <name>BOOM2_BOARD1_B_LONG</name>
+          <field_number>11</field_number>
+          <field_location unit="byte">127</field_location>
+          <data_type>ASCII_Real</data_type>
+          <field_length unit="byte">10</field_length>
+          <description>Wind sensor longitudinal differential thermal conductance for Boom 2 Board 1</description>
+          <Special_Constants>
+            <unknown_constant>-9.990E+02</unknown_constant>
+          </Special_Constants>
+        </Field_Character>
+        <Field_Character>
+          <name>BOOM2_BOARD1_B_TRANS</name>
+          <field_number>12</field_number>
+          <field_location unit="byte">138</field_location>
+          <data_type>ASCII_Real</data_type>
+          <field_length unit="byte">10</field_length>
+          <description>Wind sensor transversal differential thermal conductance for Boom 2 Board 1</description>
+          <Special_Constants>
+            <unknown_constant>-9.990E+02</unknown_constant>
+          </Special_Constants>
+        </Field_Character>
+        <Field_Character>
+          <name>BOOM2_BOARD2_B_LONG</name>
+          <field_number>13</field_number>
+          <field_location unit="byte">149</field_location>
+          <data_type>ASCII_Real</data_type>
+          <field_length unit="byte">10</field_length>
+          <description>Wind sensor longitudinal differential thermal conductance for Boom 2 Board 2</description>
+          <Special_Constants>
+            <unknown_constant>-9.990E+02</unknown_constant>
+          </Special_Constants>
+        </Field_Character>
+        <Field_Character>
+          <name>BOOM2_BOARD2_B_TRANS</name>
+          <field_number>14</field_number>
+          <field_location unit="byte">160</field_location>
+          <data_type>ASCII_Real</data_type>
+          <field_length unit="byte">10</field_length>
+          <description>Wind sensor transversal differential thermal conductance for Boom 2 Board 2</description>
+          <Special_Constants>
+            <unknown_constant>-9.990E+02</unknown_constant>
+          </Special_Constants>
+        </Field_Character>
+        <Field_Character>
+          <name>BOOM2_BOARD3_B_LONG</name>
+          <field_number>15</field_number>
+          <field_location unit="byte">171</field_location>
+          <data_type>ASCII_Real</data_type>
+          <field_length unit="byte">10</field_length>
+          <description>Wind sensor longitudinal differential thermal conductance for Boom 2 Board 3</description>
+          <Special_Constants>
+            <unknown_constant>-9.990E+02</unknown_constant>
+          </Special_Constants>
+        </Field_Character>
+        <Field_Character>
+          <name>BOOM2_BOARD3_B_TRANS</name>
+          <field_number>16</field_number>
+          <field_location unit="byte">182</field_location>
+          <data_type>ASCII_Real</data_type>
+          <field_length unit="byte">10</field_length>
+          <description>Wind sensor transversal differential thermal conductance for Boom 2 Board 3</description>
+          <Special_Constants>
+            <unknown_constant>-9.990E+02</unknown_constant>
+          </Special_Constants>
+        </Field_Character>
+        <Field_Character>
+          <name>WS_BOOM2_CONFIDENCE_LEVEL</name>
+          <field_number>17</field_number>
+          <field_location unit="byte">194</field_location>
+          <data_type>ASCII_String</data_type>
+          <field_length unit="byte">8</field_length>
+          <description>String representing the confidence level for the wind sensor; 0 = bad; 1 = good; X = unknown; (byte 0 is on the left end) - Byte 0: ASIC temperature; 0 = less than -50C; 1 = more than -50C; - Byte 1: ASIC power supply range; 0 = out of range; 1 = in range (V = [4.83 - 5.03]); - Bytes 2-3: ASIC noise; 00 = electronic noise (no valid data); 01 = frequent electronic noise (warning); 10 = electronic noise (warning); 11 = No electronic noise; - Byte 4: Wind Sensor gain characterized; 0 = no fully characterized (gain other than 0x30); 1 = characterized (gain 0x30); - Byte 5: Rover movement; 0 = moving; 1 = still; - Byte 6: Wind Sensor correctly configured based on air temperature; 0 = wrong configuration; 1 = good configuration;</description>
+          <Special_Constants>
+            <unknown_constant>XXXXXXX</unknown_constant>
+          </Special_Constants>
+        </Field_Character>
+        <Field_Character>
+          <name>BRIGHTNESS_TEMP_A</name>
+          <field_number>18</field_number>
+          <field_location unit="byte">204</field_location>
+          <data_type>ASCII_Real</data_type>
+          <field_length unit="byte">7</field_length>
+          <unit>KELVIN</unit>
+          <description>Brightness temperature of the GTS Thermopile A (band 8-14 um)</description>
+          </Field_Character>
+        <Field_Character>
+          <name>BRIGHTNESS_TEMP_B</name>
+          <field_number>19</field_number>
+          <field_location unit="byte">212</field_location>
+          <data_type>ASCII_Real</data_type>
+          <field_length unit="byte">7</field_length>
+          <unit>KELVIN</unit>
+          <description>Brightness temperature of the GTS Thermopile B (band 16-20 um)</description>
+          </Field_Character>
+        <Field_Character>
+          <name>BRIGHTNESS_TEMP_C</name>
+          <field_number>20</field_number>
+          <field_location unit="byte">220</field_location>
+          <data_type>ASCII_Real</data_type>
+          <field_length unit="byte">7</field_length>
+          <unit>KELVIN</unit>
+          <description>Brightness temperature of the GTS Thermopile C (band 14-15 um)</description>
+          </Field_Character>
+        <Field_Character>
+          <name>BRIGHTNESS_TEMP_A_LONG_TERM_UNCERTAINTY</name>
+          <field_number>21</field_number>
+          <field_location unit="byte">228</field_location>
+          <data_type>ASCII_Real</data_type>
+          <field_length unit="byte">7</field_length>
+          <unit>KELVIN</unit>
+          <description>Absolute systematic uncertainty of the brightness temperature provided by the GTS Thermopile A (band 8-14 um)</description>
+          </Field_Character>
+        <Field_Character>
+          <name>BRIGHTNESS_TEMP_B_LONG_TERM_UNCERTAINTY</name>
+          <field_number>22</field_number>
+          <field_location unit="byte">236</field_location>
+          <data_type>ASCII_Real</data_type>
+          <field_length unit="byte">7</field_length>
+          <unit>KELVIN</unit>
+          <description>Absolute systematic uncertainty of the brightness temperature provided by the GTS Thermopile B (band 16-20 um)</description>
+          <Special_Constants>
+            <unknown_constant>-999.00</unknown_constant>
+          </Special_Constants>
+        </Field_Character>
+        <Field_Character>
+          <name>BRIGHTNESS_TEMP_C_LONG_TERM_UNCERTAINTY</name>
+          <field_number>23</field_number>
+          <field_location unit="byte">244</field_location>
+          <data_type>ASCII_Real</data_type>
+          <field_length unit="byte">7</field_length>
+          <unit>KELVIN</unit>
+          <description>Absolute systematic uncertainty of the brightness temperature provided by the GTS Thermopile C (band 14-15 um)</description>
+          <Special_Constants>
+            <unknown_constant>-999.00</unknown_constant>
+          </Special_Constants>
+        </Field_Character>
+        <Field_Character>
+          <name>BRIGHTNESS_TEMP_A_SHORT_TERM_UNCERTAINTY</name>
+          <field_number>24</field_number>
+          <field_location unit="byte">252</field_location>
+          <data_type>ASCII_Real</data_type>
+          <field_length unit="byte">7</field_length>
+          <unit>KELVIN</unit>
+          <description>Relative systematic uncertainty of the brightness temperature provided by the GTS Thermopile A (band 8-14 um). It is used to compare particular data of different sols, inside a 30 sols period. It does not include calibration uncertainties, since they are constant for the comparison</description>
+          </Field_Character>
+        <Field_Character>
+          <name>BRIGHTNESS_TEMP_B_SHORT_TERM_UNCERTAINTY</name>
+          <field_number>25</field_number>
+          <field_location unit="byte">260</field_location>
+          <data_type>ASCII_Real</data_type>
+          <field_length unit="byte">7</field_length>
+          <unit>KELVIN</unit>
+          <description>Relative systematic uncertainty of the brightness temperature provided by the GTS Thermopile B (band 16-20 um). It is used to compare particular data of different sols, inside a 30 sols period. It does not include calibration uncertainties, since they are constant for the comparison</description>
+          <Special_Constants>
+            <unknown_constant>-999.00</unknown_constant>
+          </Special_Constants>
+        </Field_Character>
+        <Field_Character>
+          <name>BRIGHTNESS_TEMP_C_SHORT_TERM_UNCERTAINTY</name>
+          <field_number>26</field_number>
+          <field_location unit="byte">268</field_location>
+          <data_type>ASCII_Real</data_type>
+          <field_length unit="byte">7</field_length>
+          <unit>KELVIN</unit>
+          <description>Relative systematic uncertainty of the brightness temperature provided by the GTS Thermopile C (band 14-15 um). It is used to compare particular data of different sols, inside a 30 sols period. It does not include calibration uncertainties, since they are constant for the comparison</description>
+          <Special_Constants>
+            <unknown_constant>-999.00</unknown_constant>
+          </Special_Constants>
+        </Field_Character>
+        <Field_Character>
+          <name>GTS_CONFIDENCE_LEVEL</name>
+          <field_number>27</field_number>
+          <field_location unit="byte">277</field_location>
+          <data_type>ASCII_String</data_type>
+          <field_length unit="byte">8</field_length>
+          <description>String representing the GTS confidence level; 0 = bad; 1 = good; X = unknown; (byte 0 is on the left end) - Byte 0: GTS temperature in calibration sequence; 0 = in sequence; 1 = not in sequence; - Byte 1: ASIC power supply range; 0 = out of range; 1 = in range (V = [4.87 - 4.97]); - Byte 2: ASIC temperature; 0 = unstable; 1 = stable; - Byte 3: GTS recalibration quality; 0 = low quality; 1 = high quality; - Byte 4: Rover movement; 0 = moving; 1 = still; - Byte 5: Shadow in GTS Field of View 0 = full or partial shadow; 1 = no shadow;</description>
+          <Special_Constants>
+            <unknown_constant>XXXX</unknown_constant>
+          </Special_Constants>
+        </Field_Character>
+        <Field_Character>
+          <name>BOOM1_AIR_TEMP</name>
+          <field_number>28</field_number>
+          <field_location unit="byte">287</field_location>
+          <data_type>ASCII_Real</data_type>
+          <field_length unit="byte">7</field_length>
+          <unit>KELVIN</unit>
+          <description>Boom 1 ATS boom internal temperature. This value is the mean of the three GTS thermopiles temperatures since there is no physical sensor</description>
+          </Field_Character>
+        <Field_Character>
+          <name>BOOM1_INTERMEDIATE_AIR_TEMP</name>
+          <field_number>29</field_number>
+          <field_location unit="byte">295</field_location>
+          <data_type>ASCII_Real</data_type>
+          <field_length unit="byte">7</field_length>
+          <unit>KELVIN</unit>
+          <description>Boom 1 ATS intermediate temperature</description>
+          </Field_Character>
+        <Field_Character>
+          <name>BOOM1_TIP_AIR_TEMP</name>
+          <field_number>30</field_number>
+          <field_location unit="byte">303</field_location>
+          <data_type>ASCII_Real</data_type>
+          <field_length unit="byte">7</field_length>
+          <unit>KELVIN</unit>
+          <description>Boom 1 ATS tip temperature</description>
+          </Field_Character>
+        <Field_Character>
+          <name>BOOM1_AIR_TEMP_UNCERTAINTY</name>
+          <field_number>31</field_number>
+          <field_location unit="byte">311</field_location>
+          <data_type>ASCII_Real</data_type>
+          <field_length unit="byte">7</field_length>
+          <unit>KELVIN</unit>
+          <description>Boom 1 ATS internal temperature uncertainty</description>
+          </Field_Character>
+        <Field_Character>
+          <name>BOOM1_INTERMEDIATE_AIR_TEMP_UNCERTAINTY</name>
+          <field_number>32</field_number>
+          <field_location unit="byte">319</field_location>
+          <data_type>ASCII_Real</data_type>
+          <field_length unit="byte">7</field_length>
+          <unit>KELVIN</unit>
+          <description>Boom 1 ATS intermediate temperature uncertainty</description>
+          </Field_Character>
+        <Field_Character>
+          <name>BOOM1_TIP_AIR_TEMP_UNCERTAINTY</name>
+          <field_number>33</field_number>
+          <field_location unit="byte">327</field_location>
+          <data_type>ASCII_Real</data_type>
+          <field_length unit="byte">7</field_length>
+          <unit>KELVIN</unit>
+          <description>Boom 1 ATS tip temperature uncertainty</description>
+          </Field_Character>
+        <Field_Character>
+          <name>ATS_BOOM1_CONFIDENCE_LEVEL</name>
+          <field_number>34</field_number>
+          <field_location unit="byte">336</field_location>
+          <data_type>ASCII_String</data_type>
+          <field_length unit="byte">12</field_length>
+          <description>String representing the boom 1 ATS confidence level; 0 = bad; 1 = good; X = unknown; (byte 0 is on the left end) - Byte 0: ASIC temperature; 0 = less than -50C; 1 = more than -50C; - Byte 1: Wind Sensor status; 0 = WS off; 1 = WS on; - Byte 2: ASIC power supply range; 0 = out of range; 1 = in range (valid ranges: [4.71 - 4.79], [4.82 - 4.98], [5.11 - 5.19]); - Byte 3: Wind speed; 0 = Wind Speed &gt; TBD; 1 = Wind Speed &lt; TBD; - Byte 4: Wind direction with respect to each boom; 0 = from RTG or rover deck; 1 = free to rover perturbation; - Byte 5: Shadow in tip sensor; 0 = no shadow or partial shadow; 1 = total shadow or at night; - Byte 6: Shadow in intermediate sensor; 0 = no shadow or partial shadow; 1 = total shadow or at night; - Byte 7: Boom in shadow; 0 = no shadow or partial shadow; 1 = total shadow or at night; - Byte 8: Observation reliability; 0 = unreliable; 1 = reliable;</description>
+          </Field_Character>
+        <Field_Character>
+          <name>BOOM2_AIR_TEMP</name>
+          <field_number>35</field_number>
+          <field_location unit="byte">350</field_location>
+          <data_type>ASCII_Real</data_type>
+          <field_length unit="byte">7</field_length>
+          <unit>KELVIN</unit>
+          <description>Boom 2 ATS boom internal temperature</description>
+          </Field_Character>
+        <Field_Character>
+          <name>BOOM2_INTERMEDIATE_AIR_TEMP</name>
+          <field_number>36</field_number>
+          <field_location unit="byte">358</field_location>
+          <data_type>ASCII_Real</data_type>
+          <field_length unit="byte">7</field_length>
+          <unit>KELVIN</unit>
+          <description>Boom 2 ATS intermediate temperature</description>
+          </Field_Character>
+        <Field_Character>
+          <name>BOOM2_TIP_AIR_TEMP</name>
+          <field_number>37</field_number>
+          <field_location unit="byte">366</field_location>
+          <data_type>ASCII_Real</data_type>
+          <field_length unit="byte">7</field_length>
+          <unit>KELVIN</unit>
+          <description>Boom 2 ATS tip temperature</description>
+          </Field_Character>
+        <Field_Character>
+          <name>BOOM2_AIR_TEMP_UNCERTAINTY</name>
+          <field_number>38</field_number>
+          <field_location unit="byte">374</field_location>
+          <data_type>ASCII_Real</data_type>
+          <field_length unit="byte">7</field_length>
+          <unit>KELVIN</unit>
+          <description>Boom 2 ATS internal temperature uncertainty</description>
+          </Field_Character>
+        <Field_Character>
+          <name>BOOM2_INTERMEDIATE_AIR_TEMP_UNCERTAINTY</name>
+          <field_number>39</field_number>
+          <field_location unit="byte">382</field_location>
+          <data_type>ASCII_Real</data_type>
+          <field_length unit="byte">7</field_length>
+          <unit>KELVIN</unit>
+          <description>Boom 2 ATS intermediate temperature uncertainty</description>
+          </Field_Character>
+        <Field_Character>
+          <name>BOOM2_TIP_AIR_TEMP_UNCERTAINTY</name>
+          <field_number>40</field_number>
+          <field_location unit="byte">390</field_location>
+          <data_type>ASCII_Real</data_type>
+          <field_length unit="byte">7</field_length>
+          <unit>KELVIN</unit>
+          <description>Boom 2 ATS tip temperature uncertainty</description>
+          </Field_Character>
+        <Field_Character>
+          <name>ATS_BOOM2_CONFIDENCE_LEVEL</name>
+          <field_number>41</field_number>
+          <field_location unit="byte">399</field_location>
+          <data_type>ASCII_String</data_type>
+          <field_length unit="byte">12</field_length>
+          <description>String representing the boom 2 ATS confidence level; 0 = bad; 1 = good; X = unknown; (byte 0 is on the left end) - Byte 0: ASIC temperature; 0 = less than -50C; 1 = more than -50C; - Byte 1: Wind Sensor status; 0 = WS off; 1 = WS on; - Byte 2: ASIC power supply range; 0 = out of range; 1 = in range (valid ranges: [4.71 - 4.79], [4.82 - 4.98], [5.11 - 5.19]); - Byte 3: Wind speed; 0 = Wind Speed &gt; TBD; 1 = Wind Speed &lt; TBD; - Byte 4: Wind direction with respect to each boom; 0 = from RTG or rover deck; 1 = free to rover perturbation; - Byte 5: Shadow in tip sensor; 0 = no shadow or partial shadow; 1 = total shadow or at night; - Byte 6: Shadow in intermediate sensor; 0 = no shadow or partial shadow; 1 = total shadow or at night; - Byte 7: Boom in shadow; 0 = no shadow or partial shadow; 1 = total shadow or at night; - Byte 8: Observation reliability; 0 = unreliable; 1 = reliable;</description>
+          </Field_Character>
+        <Field_Character>
+          <name>UV_A</name>
+          <field_number>42</field_number>
+          <field_location unit="byte">413</field_location>
+          <data_type>ASCII_Real</data_type>
+          <field_length unit="byte">7</field_length>
+          <unit>W/m**2</unit>
+          <description>Ultraviolet radiation in band A</description>
+          </Field_Character>
+        <Field_Character>
+          <name>UV_B</name>
+          <field_number>43</field_number>
+          <field_location unit="byte">421</field_location>
+          <data_type>ASCII_Real</data_type>
+          <field_length unit="byte">7</field_length>
+          <unit>W/m**2</unit>
+          <description>Ultraviolet radiation in band B</description>
+          </Field_Character>
+        <Field_Character>
+          <name>UV_C</name>
+          <field_number>44</field_number>
+          <field_location unit="byte">429</field_location>
+          <data_type>ASCII_Real</data_type>
+          <field_length unit="byte">7</field_length>
+          <unit>W/m**2</unit>
+          <description>Ultraviolet radiation in band C</description>
+          </Field_Character>
+        <Field_Character>
+          <name>UV_ABC</name>
+          <field_number>45</field_number>
+          <field_location unit="byte">437</field_location>
+          <data_type>ASCII_Real</data_type>
+          <field_length unit="byte">7</field_length>
+          <unit>W/m**2</unit>
+          <description>Ultraviolet radiation in band ABC</description>
+          </Field_Character>
+        <Field_Character>
+          <name>UV_D</name>
+          <field_number>46</field_number>
+          <field_location unit="byte">445</field_location>
+          <data_type>ASCII_Real</data_type>
+          <field_length unit="byte">7</field_length>
+          <unit>W/m**2</unit>
+          <description>Ultraviolet radiation in band D</description>
+          </Field_Character>
+        <Field_Character>
+          <name>UV_E</name>
+          <field_number>47</field_number>
+          <field_location unit="byte">453</field_location>
+          <data_type>ASCII_Real</data_type>
+          <field_length unit="byte">7</field_length>
+          <unit>W/m**2</unit>
+          <description>Ultraviolet radiation in band E</description>
+          </Field_Character>
+        <Field_Character>
+          <name>UV_A_UNCERTAINTY</name>
+          <field_number>48</field_number>
+          <field_location unit="byte">461</field_location>
+          <data_type>ASCII_Real</data_type>
+          <field_length unit="byte">7</field_length>
+          <unit>%</unit>
+          <description>Systematic uncertainty in the ultraviolet radiation band A</description>
+          <Special_Constants>
+            <unknown_constant>-999.00</unknown_constant>
+          </Special_Constants>
+        </Field_Character>
+        <Field_Character>
+          <name>UV_B_UNCERTAINTY</name>
+          <field_number>49</field_number>
+          <field_location unit="byte">469</field_location>
+          <data_type>ASCII_Real</data_type>
+          <field_length unit="byte">7</field_length>
+          <unit>%</unit>
+          <description>Systematic uncertainty in the ultraviolet radiation band B</description>
+          <Special_Constants>
+            <unknown_constant>-999.00</unknown_constant>
+          </Special_Constants>
+        </Field_Character>
+        <Field_Character>
+          <name>UV_C_UNCERTAINTY</name>
+          <field_number>50</field_number>
+          <field_location unit="byte">477</field_location>
+          <data_type>ASCII_Real</data_type>
+          <field_length unit="byte">7</field_length>
+          <unit>%</unit>
+          <description>Systematic uncertainty in the ultraviolet radiation band C</description>
+          <Special_Constants>
+            <unknown_constant>-999.00</unknown_constant>
+          </Special_Constants>
+        </Field_Character>
+        <Field_Character>
+          <name>UV_ABC_UNCERTAINTY</name>
+          <field_number>51</field_number>
+          <field_location unit="byte">485</field_location>
+          <data_type>ASCII_Real</data_type>
+          <field_length unit="byte">7</field_length>
+          <unit>%</unit>
+          <description>Systematic uncertainty in the ultraviolet radiation band ABC</description>
+          <Special_Constants>
+            <unknown_constant>-999.00</unknown_constant>
+          </Special_Constants>
+        </Field_Character>
+        <Field_Character>
+          <name>UV_D_UNCERTAINTY</name>
+          <field_number>52</field_number>
+          <field_location unit="byte">493</field_location>
+          <data_type>ASCII_Real</data_type>
+          <field_length unit="byte">7</field_length>
+          <unit>%</unit>
+          <description>Systematic uncertainty in the ultraviolet radiation band D</description>
+          <Special_Constants>
+            <unknown_constant>-999.00</unknown_constant>
+          </Special_Constants>
+        </Field_Character>
+        <Field_Character>
+          <name>UV_E_UNCERTAINTY</name>
+          <field_number>53</field_number>
+          <field_location unit="byte">501</field_location>
+          <data_type>ASCII_Real</data_type>
+          <field_length unit="byte">7</field_length>
+          <unit>%</unit>
+          <description>Systematic uncertainty in the ultraviolet radiation band E</description>
+          <Special_Constants>
+            <unknown_constant>-999.00</unknown_constant>
+          </Special_Constants>
+        </Field_Character>
+        <Field_Character>
+          <name>UVS_TEMP</name>
+          <field_number>54</field_number>
+          <field_location unit="byte">509</field_location>
+          <data_type>ASCII_Real</data_type>
+          <field_length unit="byte">7</field_length>
+          <unit>KELVIN</unit>
+          <description>UVS operating temperature at the time of data collection</description>
+          </Field_Character>
+        <Field_Character>
+          <name>UVS_CONFIDENCE_LEVEL</name>
+          <field_number>55</field_number>
+          <field_location unit="byte">518</field_location>
+          <data_type>ASCII_String</data_type>
+          <field_length unit="byte">8</field_length>
+          <description>String representing the confidence level for the ultraviolet sensor; 0 = bad; 1 = good; X = unknown; (byte 0 is on the left end) - Byte 0: Solar Zenith Angle (SZA); 0 = SZA unknown or SZA out of FOV (20,55); 1 = SZA in FOV range [0,20] or pure diffuse irradiance [55,inf); - Byte 1: Global irradiance; 0 = no global irradiance; 1 = global irradiance (SZA in (0,30)); - Byte 2: Diffuse irradiance; 0 = no diffuse irradiance; 1 = diffuse irradiance (SZA in (30,inf)); - Byte 3: Rover motion; 0 = rover motion; 1 = rover still; - Byte 4: Arm motion; 0 = arm motion; 1 = arm still; - Byte 5: Arm position; 0 = unstowed; 1 = stowed; - Byte 6: Shadow; 0 = partial or total shadow; 1 = no shadow; - Byte 7: Dust sensor degradation; 0 = attenuation by dust unknown or attenuation above 10%; 1 = attenuation by dust below 10%</description>
+          </Field_Character>
+        <Field_Character>
+          <name>HUMIDITY_CHANNEL_A</name>
+          <field_number>56</field_number>
+          <field_location unit="byte">528</field_location>
+          <data_type>ASCII_Real</data_type>
+          <field_length unit="byte">7</field_length>
+          <unit>%</unit>
+          <description>Relative humidity from HS channel A</description>
+          <Special_Constants>
+            <unknown_constant>-999.00</unknown_constant>
+          </Special_Constants>
+        </Field_Character>
+        <Field_Character>
+          <name>HUMIDITY_CHANNEL_B</name>
+          <field_number>57</field_number>
+          <field_location unit="byte">536</field_location>
+          <data_type>ASCII_Real</data_type>
+          <field_length unit="byte">7</field_length>
+          <unit>%</unit>
+          <description>Relative humidity from HS channel B</description>
+          <Special_Constants>
+            <unknown_constant>-999.00</unknown_constant>
+          </Special_Constants>
+        </Field_Character>
+        <Field_Character>
+          <name>HUMIDITY_CHANNEL_C</name>
+          <field_number>58</field_number>
+          <field_location unit="byte">544</field_location>
+          <data_type>ASCII_Real</data_type>
+          <field_length unit="byte">7</field_length>
+          <unit>%</unit>
+          <description>Relative humidity from HS channel C</description>
+          <Special_Constants>
+            <unknown_constant>-999.00</unknown_constant>
+          </Special_Constants>
+        </Field_Character>
+        <Field_Character>
+          <name>HUMIDITY_CHANNEL_A_UNCERTAINTY</name>
+          <field_number>59</field_number>
+          <field_location unit="byte">552</field_location>
+          <data_type>ASCII_Real</data_type>
+          <field_length unit="byte">7</field_length>
+          <unit>%</unit>
+          <description>Calibration uncertainty for the relative humidity from HS channel A. This value is a percentage out of the relative humidity.</description>
+          <Special_Constants>
+            <unknown_constant>-999.00</unknown_constant>
+          </Special_Constants>
+        </Field_Character>
+        <Field_Character>
+          <name>HUMIDITY_CHANNEL_B_UNCERTAINTY</name>
+          <field_number>60</field_number>
+          <field_location unit="byte">560</field_location>
+          <data_type>ASCII_Real</data_type>
+          <field_length unit="byte">7</field_length>
+          <unit>%</unit>
+          <description>Calibration uncertainty for the relative humidity from HS channel B. This value is a percentage out of the relative humidity.</description>
+          <Special_Constants>
+            <unknown_constant>-999.00</unknown_constant>
+          </Special_Constants>
+        </Field_Character>
+        <Field_Character>
+          <name>HUMIDITY_CHANNEL_C_UNCERTAINTY</name>
+          <field_number>61</field_number>
+          <field_location unit="byte">568</field_location>
+          <data_type>ASCII_Real</data_type>
+          <field_length unit="byte">7</field_length>
+          <unit>%</unit>
+          <description>Calibration uncertainty for the relative humidity from HS channel C. This value is a percentage out of the relative humidity.</description>
+          <Special_Constants>
+            <unknown_constant>-999.00</unknown_constant>
+          </Special_Constants>
+        </Field_Character>
+        <Field_Character>
+          <name>HS_TEMP</name>
+          <field_number>62</field_number>
+          <field_location unit="byte">576</field_location>
+          <data_type>ASCII_Real</data_type>
+          <field_length unit="byte">7</field_length>
+          <unit>KELVIN</unit>
+          <description>Humidity sensor operating temperature at the time of data collection</description>
+          <Special_Constants>
+            <unknown_constant>-999.00</unknown_constant>
+          </Special_Constants>
+        </Field_Character>
+        <Field_Character>
+          <name>HS_CONFIDENCE_LEVEL</name>
+          <field_number>63</field_number>
+          <field_location unit="byte">585</field_location>
+          <data_type>ASCII_String</data_type>
+          <field_length unit="byte">8</field_length>
+          <description>String representing the confidence level for the humidity; 0 = bad; 1 = good; X = unknown; (byte 0 is on the left end) - Byte 0: Humidity observation reliability; 0 = preliminary; 1 = reliable; - Byte 1: Humidity Channel A quality; 0 = bad; 1 = good; - Byte 2: Humidity Channel B quality; 0 = bad; 1 = good; - Byte 3: Humidity Channel C quality; 0 = bad; 1 = good;</description>
+          <Special_Constants>
+            <unknown_constant>XXXX</unknown_constant>
+          </Special_Constants>
+        </Field_Character>
+        <Field_Character>
+          <name>PS_CONFIGURATION</name>
+          <field_number>64</field_number>
+          <field_location unit="byte">596</field_location>
+          <data_type>ASCII_String</data_type>
+          <field_length unit="byte">2</field_length>
+          <description>Pressure sensor configuration. First character: '1' = oscillator 1 on '2' = oscillator 2 on Second character: 'L' = low resolution 'H' = high resolution</description>
+          </Field_Character>
+        <Field_Character>
+          <name>THERMOCAP_1_TEMP</name>
+          <field_number>65</field_number>
+          <field_location unit="byte">600</field_location>
+          <data_type>ASCII_Real</data_type>
+          <field_length unit="byte">7</field_length>
+          <unit>KELVIN</unit>
+          <description>PS temperature from thermocap 1</description>
+          <Special_Constants>
+            <unknown_constant>-999.00</unknown_constant>
+          </Special_Constants>
+        </Field_Character>
+        <Field_Character>
+          <name>THERMOCAP_2_TEMP</name>
+          <field_number>66</field_number>
+          <field_location unit="byte">608</field_location>
+          <data_type>ASCII_Real</data_type>
+          <field_length unit="byte">7</field_length>
+          <unit>KELVIN</unit>
+          <description>PS temperature from thermocap 2</description>
+          <Special_Constants>
+            <unknown_constant>-999.00</unknown_constant>
+          </Special_Constants>
+        </Field_Character>
+        <Field_Character>
+          <name>BAROCAP_PRESSURE_1</name>
+          <field_number>67</field_number>
+          <field_location unit="byte">616</field_location>
+          <data_type>ASCII_Real</data_type>
+          <field_length unit="byte">7</field_length>
+          <unit>PASCAL</unit>
+          <description>Pressure for barocap 1</description>
+          <Special_Constants>
+            <unknown_constant>-999.00</unknown_constant>
+          </Special_Constants>
+        </Field_Character>
+        <Field_Character>
+          <name>BAROCAP_PRESSURE_2</name>
+          <field_number>68</field_number>
+          <field_location unit="byte">624</field_location>
+          <data_type>ASCII_Real</data_type>
+          <field_length unit="byte">7</field_length>
+          <unit>PASCAL</unit>
+          <description>Pressure for barocap 2</description>
+          <Special_Constants>
+            <unknown_constant>-999.00</unknown_constant>
+          </Special_Constants>
+        </Field_Character>
+        <Field_Character>
+          <name>BAROCAP_PRESSURE_1_UNCERTAINTY</name>
+          <field_number>69</field_number>
+          <field_location unit="byte">632</field_location>
+          <data_type>ASCII_Real</data_type>
+          <field_length unit="byte">7</field_length>
+          <unit>PASCAL</unit>
+          <description>Barocap 1 absolute accuracy</description>
+          <Special_Constants>
+            <unknown_constant>-999.00</unknown_constant>
+          </Special_Constants>
+        </Field_Character>
+        <Field_Character>
+          <name>BAROCAP_PRESSURE_2_UNCERTAINTY</name>
+          <field_number>70</field_number>
+          <field_location unit="byte">640</field_location>
+          <data_type>ASCII_Real</data_type>
+          <field_length unit="byte">7</field_length>
+          <unit>PASCAL</unit>
+          <description>Barocap 2 absolute accuracy</description>
+          <Special_Constants>
+            <unknown_constant>-999.00</unknown_constant>
+          </Special_Constants>
+        </Field_Character>
+        <Field_Character>
+          <name>PS_CONFIDENCE_LEVEL</name>
+          <field_number>71</field_number>
+          <field_location unit="byte">649</field_location>
+          <data_type>ASCII_String</data_type>
+          <field_length unit="byte">8</field_length>
+          <description>String representing the confidence level for the pressure sensor; 0 = bad; 1 = good; X = unknown; (byte 0 is on the left end) - Byte 0: Oscillator; 0 = oscillator 1; 1 = oscillator 2; - Byte 1: Warm up effect (only for oscillator 2 and barocap 1) 0 = warm up effect; 1 = no warm up effect; - Byte 2: Shadow effect; 0 = shadow effect; 1 = no shadow effect;</description>
+          </Field_Character>
+      </Record_Character>
+    </Table_Character>
+  </File_Area_Observational>
+  <File_Area_Observational_Supplemental>
+    <File>
+      <file_name>RME_796931302RNV45000000000_______P1.LBL</file_name>
+      <local_identifier>RME_796931302RNV45000000000_______P1_pds3file</local_identifier>
+    </File>
+    <Stream_Text>
+      <local_identifier>RME_796931302RNV45000000000_______P1_pds3file_stream</local_identifier>
+      <offset unit="byte">0</offset>
+      <parsing_standard_id>PDS3</parsing_standard_id>
+      <record_delimiter>Carriage-Return Line-Feed</record_delimiter>
+    </Stream_Text>
+  </File_Area_Observational_Supplemental>
+</Product_Observational>
