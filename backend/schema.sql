@@ -46,9 +46,25 @@ CREATE TABLE IF NOT EXISTS mensaje (
     creado      TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+CREATE TABLE IF NOT EXISTS reporte (
+    id          TEXT PRIMARY KEY,
+    autor       TEXT NOT NULL REFERENCES explorador(id),
+    tipo        TEXT NOT NULL,
+    lon         REAL NOT NULL,
+    lat         REAL NOT NULL,
+    elev_m      REAL DEFAULT 0.0,
+    sol_min     REAL DEFAULT 0.0,
+    km          REAL DEFAULT 0.0,
+    texto       TEXT NOT NULL,
+    adjuntos_json TEXT DEFAULT '{}',
+    sync_status TEXT NOT NULL DEFAULT 'local',
+    creado      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE INDEX IF NOT EXISTS ix_hallazgo_exp ON hallazgo(explorador);
 CREATE INDEX IF NOT EXISTS ix_mensaje_exp ON mensaje(explorador);
 CREATE INDEX IF NOT EXISTS ix_mision_exp ON mision(explorador);
+CREATE INDEX IF NOT EXISTS ix_reporte_autor ON reporte(autor);
 
 INSERT OR IGNORE INTO explorador (id, rol, color) VALUES
     ('ev1', 'Comandante', '#1E64DC'),

@@ -39,7 +39,10 @@ DATA = ROOT / "backend" / "data"
 sys.path.insert(0, str(ROOT / "backend"))
 sys.path.insert(0, str(ROOT / "src"))
 
+import yaml
 from docstore import DocStore  # noqa: E402
+from marsroute.storage import Storage  # noqa: E402
+from marsroute.domain import Report  # noqa: E402
 
 MAX_BODY = 64 * 1024
 CREW = {"ev1", "ev2", "ev3"}
@@ -52,6 +55,7 @@ db = sqlite3.connect(DB_PATH, check_same_thread=False)
 db.row_factory = sqlite3.Row
 db.executescript((ROOT / "backend" / "schema.sql").read_text(encoding="utf-8"))
 docs = DocStore(DATA / "docstore")
+storage = Storage(DB_PATH)
 
 # carga inicial del almacén de documentos con los datos exportados
 _obj = WEB / "data" / "objetivos.json"
@@ -129,7 +133,7 @@ def save_telemetria(b):
     docs.insert("telemetria", doc)
 
 
-# ---------------------------------------------------------------- rutas (grilla completa)
+# ---------------------------------------------------------------- rutas multicriterio
 _planner = {}
 
 
@@ -137,35 +141,60 @@ def plan_route(b):
     import numpy as np
     import yaml
     from marsroute.layers import load_layers
-    from marsroute.planner import astar, build_cost_surface, route_lonlat, simplify
+    from marsroute.multicriteria import MultiCriteriaPlanner
 
-    if "cost" not in _planner:
+    if "planner_instance" not in _planner:
         cfg = yaml.safe_load((ROOT / "config" / "mission.yaml").read_text(encoding="utf-8"))
+        gale_cfg = yaml.safe_load((ROOT / "config" / "regions" / "gale.yaml").read_text(encoding="utf-8"))
         layers = load_layers(ROOT / "data" / "processed" / "layers.npz")
-        trav = np.load(ROOT / "outputs" / "traversability.npy")
-        _planner.update(cfg=cfg, layers=layers, trav=trav)
-    cfg, layers, trav = _planner["cfg"], _planner["layers"], _planner["trav"]
-    user = b.get("cfg") or {}
-    pc = dict(cfg["planner"])
-    pc["risk_weight"] = _num(user.get("riskW", pc["risk_weight"]), 0, 20)
-    pc["slope_weight"] = _num(user.get("slopeW", pc["slope_weight"]), 0, 20)
-    pc["max_slope_deg"] = _num(user.get("maxSlope", pc["max_slope_deg"]), 5, 35)
-    cost, blocked = build_cost_surface(trav, layers["slope"], **pc)
+        layers["traversability"] = np.load(ROOT / "outputs" / "traversability.npy")
+        planner = MultiCriteriaPlanner(layers, tuple(cfg["bbox"]), cfg["grid_size"])
+        _planner.update(cfg=cfg, gale_cfg=gale_cfg, layers=layers, planner_instance=planner)
+
+    planner = _planner["planner_instance"]
+    shelters = _planner["gale_cfg"].get("shelters", [])
+
     stops = b.get("stops") or []
     if not (2 <= len(stops) <= 8):
         raise ValueError("se necesitan entre 2 y 8 puntos")
-    w, s, e, n = cfg["bbox"]
-    size = cfg["grid_size"]
-    cells = []
-    for lon, lat in stops:
-        lon, lat = _num(lon, w, e), _num(lat, s, n)
-        cells.append((min(size - 1, int((n - lat) / (n - s) * size)), min(size - 1, int((lon - w) / (e - w) * size))))
-    path = []
-    for a, c in zip(cells, cells[1:]):
-        r = astar(cost, blocked, a, c)
-        path.extend(r.cells.tolist() if not path else r.cells.tolist()[1:])
-    ll = route_lonlat(simplify(np.asarray(path)), cfg["bbox"], size)
-    return {"route": ll.tolist(), "cells": len(path)}
+
+    start = (float(stops[0][0]), float(stops[0][1]))
+    targets = [(float(p[0]), float(p[1])) for p in stops[1:-1]]
+    final_dest = (float(stops[-1][0]), float(stops[-1][1]))
+
+    requested_profile = b.get("profile", "segura")
+    require_shelter = b.get("require_shelter", True)
+
+    if requested_profile == "all":
+        alts = planner.plan_all_alternatives(
+            start_lonlat=start,
+            target_lonlats=targets,
+            final_shelter_lonlat=final_dest,
+            shelters_catalog=shelters,
+            require_final_shelter=require_shelter,
+        )
+        first = alts.get("segura") or list(alts.values())[0]
+        return {
+            "alternatives": {k: v.to_dict() for k, v in alts.items()},
+            "route": [[p[0], p[1]] for p in first.points],
+            "cells": len(first.points),
+        }
+
+    alt = planner.plan_alternative(
+        profile_id=requested_profile,
+        start_lonlat=start,
+        target_lonlats=targets,
+        final_shelter_lonlat=final_dest,
+        shelters_catalog=shelters,
+        require_final_shelter=require_shelter,
+    )
+    return {
+        "route": [[p[0], p[1]] for p in alt.points],
+        "cells": len(alt.points),
+        "alternative": alt.to_dict(),
+        "is_valid": alt.is_valid,
+        "rejection_reason": alt.rejection_reason,
+    }
 
 
 # ---------------------------------------------------------------- HTTP
@@ -220,6 +249,22 @@ class Handler(BaseHTTPRequestHandler):
                     return self._json(200, [dict(r) for r in rows])
                 if name == "telemetria":
                     return self._json(200, docs.find("telemetria", {"crew": crew}, limit=1000))
+                if name == "regions":
+                    regions = []
+                    reg_dir = ROOT / "config" / "regions"
+                    if reg_dir.exists():
+                        for f in sorted(reg_dir.glob("*.yaml")):
+                            regions.append(yaml.safe_load(f.read_text(encoding="utf-8")))
+                    return self._json(200, regions)
+                if name == "profiles":
+                    prof_file = ROOT / "config" / "route_profiles.yaml"
+                    return self._json(200, yaml.safe_load(prof_file.read_text(encoding="utf-8")) if prof_file.exists() else {})
+                if name == "scenario":
+                    scen_file = ROOT / "data" / "simulated" / "demo_scenario.json"
+                    return self._json(200, json.loads(scen_file.read_text(encoding="utf-8")) if scen_file.exists() else {})
+                if name == "reportes":
+                    reports = storage.list_reports(q.get("author") or q.get("autor"))
+                    return self._json(200, [r.to_dict() for r in reports])
             except ValueError as exc:
                 return self._json(400, {"error": str(exc)})
             return self._json(404, {"error": "ruta de API desconocida"})
@@ -245,6 +290,22 @@ class Handler(BaseHTTPRequestHandler):
             if not isinstance(body, dict):
                 raise ValueError("se espera un objeto JSON")
             name = url.path[5:] if url.path.startswith("/api/") else ""
+            if name == "reportes":
+                rep = Report(
+                    id=_txt(body.get("id"), 50, True),
+                    author=_txt(body.get("author") or body.get("autor"), 20, True),
+                    type=_txt(body.get("type") or body.get("tipo"), 30, True),
+                    lon=_num(body.get("lon"), -180, 180),
+                    lat=_num(body.get("lat"), -90, 90),
+                    elev_m=_num(body.get("elev_m") or body.get("elev"), -20000, 30000) or 0.0,
+                    sol_min=_num(body.get("sol_min") or body.get("simMin"), 0, 1e7) or 0.0,
+                    km=_num(body.get("km"), 0, 10000) or 0.0,
+                    text=_txt(body.get("text") or body.get("texto"), 1000, True),
+                    attachments=body.get("attachments") or body.get("adjuntos") or {},
+                    sync_status=_txt(body.get("sync_status"), 20) or "local",
+                )
+                storage.save_report(rep)
+                return self._json(201, {"ok": True, "id": rep.id})
             handlers = {"hallazgos": save_hallazgo, "bitacora": save_mensaje, "misiones": save_mision, "telemetria": save_telemetria}
             if name in handlers:
                 handlers[name](body)

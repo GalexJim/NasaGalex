@@ -36,8 +36,27 @@
     const q = API.queue.splice(0);
     for (const [k, p] of q) await API.send(k, p);
   };
-  API.route = async function (stops, cfg) {
+  API.route = async function (stops, cfg, profile = "all") {
     if (!API.online) return null;
-    try { return await req("route", { method: "POST", body: JSON.stringify({ stops, cfg }) }, 30000); } catch (e) { return null; }
+    try { return await req("route", { method: "POST", body: JSON.stringify({ stops, cfg, profile }) }, 60000); } catch (e) { return null; }
+  };
+  API.getRegions = async function () {
+    if (!API.online) return null;
+    try { return await req("regions"); } catch (e) { return null; }
+  };
+  API.getProfiles = async function () {
+    if (!API.online) return null;
+    try { return await req("profiles"); } catch (e) { return null; }
+  };
+  API.getScenario = async function () {
+    if (!API.online) return null;
+    try { return await req("scenario"); } catch (e) { return null; }
+  };
+  API.getReportes = async function () {
+    if (!API.online) return [];
+    try { return await req("reportes"); } catch (e) { return []; }
+  };
+  API.sendReporte = async function (rep) {
+    return await API.send("reportes", rep);
   };
 })();

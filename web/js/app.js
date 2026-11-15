@@ -27,6 +27,7 @@
     const base = MR.withKm(D.routes[c.main].points);
     return {
       crew: c, mode: "base", choice: "model", baseRoute: base, adjusted: null, shortRoute: null, route: null,
+      profileMode: "segura", mobility: "rover", alertTriggered: false,
       km: 0, simMin: EVA_START * 60, playing: false, speed: 1, stages: [], stageIdx: 0,
       findings: [], missions: [], log: [], ai: [], handled: {}, events: [], proposed: {},
       unread: { misiones: 1, bitacora: 0, hallazgos: 0 }, briefed: false, wx: null, lastWx: -1e9,
@@ -53,7 +54,16 @@
   }
   const curPos = () => (T.route ? posAt(T.route, T.km) : null);
   const time = () => MR.solTime(T.simMin);
-  function goalObj(c = T.crew) { return D.objetivos.find(o => o.id === c.goalId); }
+  function regionObjectives() {
+    if (currentRegion === "jezero" && window.JEZERO_DATA && window.JEZERO_DATA.objetivos) {
+      return window.JEZERO_DATA.objetivos;
+    }
+    return D.objetivos;
+  }
+  function goalObj(c = T.crew) {
+    const list = regionObjectives();
+    return list.find(o => o.id === c.goalId) || list[list.length - 1];
+  }
   function makeStages(route) {
     const L = route[route.length - 1][2], n = Math.max(2, Math.min(5, Math.round(L / 14)));
     return Array.from({ length: n }, (_, i) => (L * (i + 1)) / n);
@@ -85,6 +95,13 @@
     buildCrew(); buildLeftPanel(); bindTop(); bindKeys();
     if (window.innerWidth < 820) setLeft(false);
     renderAll();
+    const urlParams = new URLSearchParams(window.location.search);
+    const initReg = urlParams.get("region");
+    if (initReg === "jezero") {
+      const regSel = $("regionSelect");
+      if (regSel) regSel.value = "jezero";
+      switchRegion("jezero");
+    }
     MR.API.init();
     requestAnimationFrame(loop);
     setTimeout(() => {
@@ -115,6 +132,516 @@
     banner({ kind: "info", title: `${T.crew.short} · ${T.crew.role}`, sub: "Viaje independiente: su ruta, reloj y bitácora son propios.", ttl: 3500 });
     if (!T.briefed) setTimeout(openMainBriefing, 300);
   }
+  let currentRegion = "gale";
+  let currentLang = "es";
+
+  function switchRegion(regionId) {
+    if (regionId === currentRegion) return;
+    currentRegion = regionId;
+    MR.setRegion(regionId);
+    const regSel = $("regionSelect");
+    if (regSel && regSel.value !== regionId) regSel.value = regionId;
+    document.querySelectorAll(".rqs-btn").forEach(b => b.classList.toggle("active", b.dataset.region === regionId));
+
+    if (regionId === "jezero") {
+      $("brandTitle").textContent = currentLang === "en" ? "Jezero Crater Mission" : "Misión Cráter Jezero";
+      $("brandSub").textContent = currentLang === "en" ? "Jezero Crater · Mars (Perseverance)" : "Cráter Jezero · Marte (Perseverance)";
+      banner({ kind: "info", title: "Región: Cráter Jezero", sub: "Misión Perseverance · Terreno y mosaico de Jezero activos.", ttl: 4000 });
+
+      const jezRoute = (window.JEZERO_DATA && window.JEZERO_DATA.route) ? window.JEZERO_DATA.route.slice() : [];
+      T.baseRoute = jezRoute;
+      T.route = jezRoute.slice();
+      T.adjusted = null;
+      T.km = 0;
+      S.layer = "none";
+      MR.Map.setRegion("jezero");
+      MR.Map.setLayer("none", 0);
+      renderLayerList("jezero");
+      renderLegend();
+    } else {
+      $("brandTitle").textContent = currentLang === "en" ? "Safe Route to Mount Sharp" : "Ruta a Mount Sharp";
+      $("brandSub").textContent = currentLang === "en" ? "Gale Crater · Mars (Curiosity)" : "Cráter Gale · Marte (Curiosity)";
+      banner({ kind: "info", title: "Región: Cráter Gale", sub: "Misión Curiosity · Terreno local y predicción activos.", ttl: 4000 });
+
+      T.baseRoute = MR.withKm(D.routes[T.crew.main].points);
+      T.route = T.baseRoute.slice();
+      T.adjusted = null;
+      T.km = 0;
+      S.layer = "hazard";
+      MR.Map.setRegion("gale");
+      MR.Map.setLayer("hazard", S.opacity);
+      renderLayerList("gale");
+      renderLegend();
+    }
+
+    if (S.view === "3d" && MR.Scene3D && MR.Scene3D.ready) {
+      MR.Scene3D.rebuild();
+      sync3dTexture();
+      const p = curPos();
+      if (p) MR.Scene3D.focus(p[0], p[1]);
+    }
+
+    renderMineralsUI();
+    renderRoutes(true);
+    refreshMarkers();
+    renderDock(true);
+    renderStatus();
+    renderObjList();
+    renderStops();
+    renderProfileMetrics();
+    update3d();
+  }
+
+  function toggleLanguage() {
+    currentLang = currentLang === "es" ? "en" : "es";
+    const lbl = $("langLabel");
+    if (lbl) lbl.textContent = currentLang.toUpperCase();
+    if (currentLang === "en") {
+      $("brandTitle").textContent = currentRegion === "jezero" ? "Jezero Crater Mission" : "Safe Route to Mount Sharp";
+      $("brandSub").textContent = currentRegion === "jezero" ? "Jezero Crater · Mars" : "Gale Crater · Mars";
+      $("btnReport").innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 21V4h10l-1.5 3.5L16 11H6"/></svg>Report here`;
+      toast("Language switched to English");
+    } else {
+      $("brandTitle").textContent = currentRegion === "jezero" ? "Misión Cráter Jezero" : "Ruta a Mount Sharp";
+      $("brandSub").textContent = currentRegion === "jezero" ? "Cráter Jezero · Marte" : "Cráter Gale · Marte";
+      $("btnReport").innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 21V4h10l-1.5 3.5L16 11H6"/></svg>Reportar aquí`;
+      toast("Idioma cambiado a Español");
+    }
+    renderStatus();
+    renderProfileMetrics();
+  }
+
+  function triggerWeatherAlert() {
+    T.playing = false; renderStatus(); T.alerts++;
+    if (S.panel) togglePanel(null);
+    $("stageCard").hidden = true;
+    T.events.push({ t: T.simMin, c: "var(--danger)", txt: "Alerta crítica: tormenta de polvo MDA-GALE-14" });
+    logSys("ALERTA CRÍTICA MDA-GALE-14: Viento 28.4 m/s (umbral: 20 m/s), Opacidad tau 2.15 (umbral: 1.50).");
+
+    showModal(`<div class="mhead"><div class="tag-line"><span class="tg alert">Alerta meteorológica crítica · Simulación pausada</span></div>
+      <h2>${MR.ICONS.warn}Tormenta de polvo y viento en MDA-GALE-14</h2>
+      <div class="coords" style="color:var(--text-2);font-size:12px;margin-top:2px">Sol 1 · 11:30 LTST · Estación Gale (137.48°E, -4.68°S)</div></div>
+      <div class="mbody">
+        ${factsHtml([
+          ["28,4 m/s", "Viento (Crítico > 20 m/s)"],
+          ["2,15", "Opacidad \u03c4 (Crítico > 1.50)"],
+          ["−64 °C", "Temp. ambiente"],
+          ["Dunas Bagnold", "Corredor impactado"]
+        ])}
+        <div class="alt" style="margin-top:10px;padding:10px;border-left:3px solid var(--danger);background:var(--panel-2);border-radius:4px">
+          <strong>Explicación del sistema predictivo:</strong><br>
+          La estación MDA-GALE-14 reporta ráfagas severas y caída de visibilidad directa sobre el corredor de Bagnold Dunes.
+          El cruce directo presenta alto riesgo de abrasión y atascamiento del vehículo.
+          <br><strong>Recomendación:</strong> Replanificar de inmediato activando el <em>Perfil Seguro</em> para rodear la tormenta hacia Mount Sharp Base.
+        </div>
+        <div class="actions" style="margin-top:14px;display:flex;gap:8px;justify-content:flex-end">
+          <button class="btn ghost" data-ignore>Mantener rumbo actual</button>
+          <button class="btn primary" data-replan>Replanificar ruta segura</button>
+        </div>
+      </div>`, {
+      cls: "critical", dismiss: false,
+      bind: el => {
+        el.querySelector("[data-ignore]").addEventListener("click", () => {
+          closeModal();
+          banner({ kind: "warn", title: "Alerta ignorada por el operador", sub: "Riesgo de daño en sensores y atasco en Bagnold Dunes.", ttl: 5000 });
+          T.playing = true; renderStatus();
+        });
+        el.querySelector("[data-replan]").addEventListener("click", () => {
+          closeModal();
+          setRouteProfile("segura");
+          const curP = curPos() || T.baseRoute[0];
+          MR.API.sendReporte({
+            id: uid("rep_storm_"),
+            author: T.crew.id,
+            type: "alerta_clima",
+            lon: curP[0],
+            lat: curP[1],
+            elev: curP[3] || -4400,
+            km: T.km,
+            text: "Replanificación de emergencia por tormenta de polvo MDA-GALE-14 (viento 28.4 m/s, tau 2.15)",
+            attachments: { wind: 28.4, tau: 2.15, simMin: T.simMin, station: "MDA-GALE-14" },
+            sync_status: "local"
+          });
+          toast("Ruta replanificada: corredor este seguro hacia Mount Sharp Base");
+          banner({ kind: "nominal", title: "Ruta replanificada con éxito", sub: "Evitando corredor de tormenta en MDA-GALE-14 · Refugio seguro verificado.", ttl: 6000 });
+        });
+      }
+    });
+  }
+
+  function setRouteProfile(p) {
+    T.profileMode = p;
+    document.querySelectorAll("#profileSeg button").forEach(b => {
+      b.setAttribute("aria-checked", b.dataset.profile === p);
+    });
+    if (p === "segura") {
+      Object.assign(MR.cfg, { riskW: 5.0, slopeW: 4.0, maxSlope: 15 });
+    } else if (p === "rapida") {
+      Object.assign(MR.cfg, { riskW: 1.5, slopeW: 1.0, maxSlope: 20 });
+    } else if (p === "cientifica") {
+      Object.assign(MR.cfg, { riskW: 3.5, slopeW: 2.5, maxSlope: 18 });
+    }
+    $("riskW").value = MR.cfg.riskW; $("rwOut").textContent = fmt(MR.cfg.riskW, 1);
+    $("slopeW").value = MR.cfg.slopeW; $("swOut").textContent = fmt(MR.cfg.slopeW, 1);
+    $("maxSlope").value = MR.cfg.maxSlope; $("msOut").textContent = MR.cfg.maxSlope + "°";
+
+    if (T.mode !== "walk") {
+      recalcRoute();
+    } else {
+      renderProfileMetrics();
+    }
+    toast(`Perfil activo: ${p.toUpperCase()}`);
+  }
+
+  function setMobility(m) {
+    T.mobility = m;
+    document.querySelectorAll("#mobilitySeg button").forEach(b => {
+      b.setAttribute("aria-checked", b.dataset.mobility === m);
+    });
+    renderProfileMetrics();
+    toast(`Modo de movilidad: ${m === "rover" ? "Rover presurizado" : "EVA a pie (traje)"}`);
+  }
+
+  function renderProfileMetrics() {
+    const box = $("profileMetrics");
+    if (!box) return;
+    const r = activeRoute() || T.baseRoute;
+    const res = MR.routeResources(r, T.mobility || "rover");
+    if (!res) { box.innerHTML = "<p>Sin ruta activa</p>"; return; }
+
+    const isRover = (T.mobility || "rover") === "rover";
+    const modeLabel = isRover ? "Rover presurizado" : "Traje EVA (a pie)";
+    const shelterBadgeCls = res.shelterOk ? "ok" : "err";
+    const shelterBadgeText = res.shelterOk ? "REFUGIO VERIFICADO" : "SIN REFUGIO PRESURIZADO";
+
+    box.innerHTML = `
+      <div class="metric-item">
+        <span class="metric-lbl">Tiempo estimado</span>
+        <span class="metric-val">${fmt(res.hours, 1)} h Sol</span>
+      </div>
+      <div class="metric-item">
+        <span class="metric-lbl">Consumo O₂ (${fmt(res.o2Consumed, 0)} L)</span>
+        <span class="metric-val" style="color:${res.o2Pct > 80 ? 'var(--danger)' : 'var(--nominal)'}">${fmt(res.o2Pct, 0)}% (reserva ${fmt(res.o2RemainingPct, 0)}%)</span>
+      </div>
+      <div class="metric-item">
+        <span class="metric-lbl">Batería (${modeLabel})</span>
+        <span class="metric-val" style="color:${res.battPct > 85 ? 'var(--danger)' : 'var(--nominal)'}">${fmt(res.battPct, 0)}%</span>
+      </div>
+      <div class="metric-item">
+        <span class="metric-lbl">Dosis radiación</span>
+        <span class="metric-val">${fmt(res.radDose, 3)} mSv</span>
+      </div>
+      <div class="metric-shelter">
+        <span class="metric-lbl">${res.shelterName} (${fmt(res.shelterDistKm, 1)} km)</span>
+        <span class="shelter-badge ${shelterBadgeCls}">${shelterBadgeText}</span>
+      </div>
+      ${!res.valid ? `<div class="warn" style="grid-column:1/-1;color:var(--danger);font-size:10px;margin-top:2px;">⚠️ ${esc(res.rejectionReason)}</div>` : ''}
+    `;
+  }
+
+  function renderLayerList(region = currentRegion) {
+    const list = $("layerList");
+    if (!list) return;
+    list.innerHTML = "";
+    MR.LAYERS.forEach(L => {
+      const isJezero = region === "jezero";
+      const na = isJezero && !["none", "slope", "hazard", "roughness", "traversability"].includes(L.key);
+      const b = document.createElement("button");
+      b.className = "layer-opt";
+      b.setAttribute("role", "radio");
+      b.dataset.key = L.key;
+      b.setAttribute("aria-checked", b.dataset.key === S.layer);
+      if (na) b.classList.add("layer-na");
+      const sw = L.key === "hazard" ? "repeating-linear-gradient(45deg,#C42828 0 4px,#F0963C 4px 8px)" : L.key === "none" ? "var(--panel-2)" : MR.cssRamp(L);
+      const provBadge = na ? '<span class="badge-prov na">SOLO GALE</span>' : (L.provLabel ? `<span class="badge-prov ${L.prov}">${L.provLabel}</span>` : "");
+      const subTxt = isJezero
+        ? (L.key === "none" ? "Mosaico fotográfico CTX Jezero" : L.key === "slope" ? "Pendiente MOLA / HiRISE" : L.key === "hazard" ? "Obstáculos y escarpes de Jezero" : L.key === "roughness" ? "Rugosidad local MOLA" : "Facilidad de paso Perseverance")
+        : L.sub;
+      b.innerHTML = `<span class="sw" style="background:${sw}"></span>` +
+        `<span><b>${L.name}</b><small>${na ? "Solo disponible en Gale (THEMIS/Viking local)" : subTxt}</small></span>` +
+        `<span class="right-wrap" style="display:flex;align-items:center;gap:4px">${provBadge}${L.src ? '<span class="info" tabindex="0" aria-label="Fuente">?</span>' : ''}</span>`;
+      b.addEventListener("click", () => {
+        if (na) { toast(`La capa «${L.name}» es específica del Cráter Gale (THEMIS IR).`); return; }
+        S.layer = L.key;
+        MR.Map.setLayer(S.layer, S.opacity);
+        renderLegend();
+        sync3dTexture();
+      });
+      const inf = b.querySelector(".info");
+      if (inf) {
+        const show = e => { const r = inf.getBoundingClientRect(); MR.showTip(esc(L.src), r.right, r.top + 4); e.stopPropagation(); };
+        inf.addEventListener("mouseenter", show); inf.addEventListener("focus", show);
+        inf.addEventListener("mouseleave", MR.hideTip); inf.addEventListener("blur", MR.hideTip);
+        inf.addEventListener("click", e => { e.stopPropagation(); show(e); });
+      }
+      list.appendChild(b);
+    });
+  }
+
+  /* =====================================================
+     BÚSQUEDA CIENTÍFICA Y VISOR DE MINERALES
+     ===================================================== */
+  let activeMineralCategory = "Todos";
+  let mineralSearchQuery = "";
+  let scientificSearchMode = false;
+
+  const MINERAL_CATEGORIES = [
+    "Todos",
+    "Minerales hidratados",
+    "Arcillas / Filosilicatos",
+    "Sulfatos hidratados",
+    "Óxidos de hierro",
+    "Carbonatos / Olivino",
+    "Silicatos basálticos"
+  ];
+
+  function getRegionMinerals() {
+    const all = window.MARS_MINERALS || [];
+    const reg = currentRegion || "gale";
+    return all.filter(m => m.region === reg);
+  }
+
+  function matchesCategory(m, cat) {
+    if (cat === "Todos") return true;
+    if (cat === "Minerales hidratados") {
+      return (
+        m.category.includes("hidratados") ||
+        m.category.includes("Arcillas") ||
+        m.category.includes("Sulfatos") ||
+        m.category.includes("Sílice") ||
+        m.category.includes("Filosilicatos")
+      );
+    }
+    return m.category === cat || m.category.includes(cat);
+  }
+
+  function renderMineralsUI() {
+    const regBadge = $("minRegionBadge");
+    if (regBadge) {
+      const reg = currentRegion || "gale";
+      regBadge.textContent = reg === "jezero" ? "Cráter Jezero · Perseverance" : "Cráter Gale · Curiosity";
+    }
+
+    renderMineralChips();
+    renderMineralsList();
+  }
+
+  function renderMineralChips() {
+    const container = $("minCategoryChips");
+    if (!container) return;
+    container.innerHTML = "";
+
+    MINERAL_CATEGORIES.forEach(cat => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "min-chip" + (cat === activeMineralCategory ? " active" : "");
+      btn.dataset.cat = cat;
+      // MARKUP EXACTO REQUERIDO POR ESPECIFICACIÓN:
+      btn.innerHTML = `<span class="dot"><svg viewBox="0 0 24 24"><path d="M12 3l2.5 6 6.5.5-5 4 1.5 6.5L12 17l-5.5 3 1.5-6.5-5-4 6.5-.5z"></path></svg></span><span class="tag">${esc(cat)}</span>`;
+      btn.addEventListener("click", () => {
+        activeMineralCategory = cat;
+        renderMineralChips();
+        renderMineralsList();
+      });
+      container.appendChild(btn);
+    });
+  }
+
+  function renderMineralsList() {
+    const listEl = $("minList");
+    const countEl = $("minCount");
+    if (!listEl) return;
+    listEl.innerHTML = "";
+
+    const minerals = getRegionMinerals();
+    const query = (mineralSearchQuery || "").toLowerCase().trim();
+    const filtered = minerals.filter(m => {
+      if (!matchesCategory(m, activeMineralCategory)) return false;
+      if (!query) return true;
+      return (
+        m.name.toLowerCase().includes(query) ||
+        m.formula.toLowerCase().includes(query) ||
+        m.instrument.toLowerCase().includes(query) ||
+        m.category.toLowerCase().includes(query) ||
+        m.summary.toLowerCase().includes(query)
+      );
+    });
+
+    if (countEl) {
+      countEl.textContent = `${filtered.length} objetivo${filtered.length === 1 ? "" : "s"}`;
+    }
+
+    if (filtered.length === 0) {
+      listEl.innerHTML = `<div class="empty" style="padding:16px;text-align:center;color:var(--text-2);font-size:12px;">No se encontraron minerales con ese criterio en esta región.</div>`;
+      return;
+    }
+
+    const r = activeRoute() || T.baseRoute;
+
+    filtered.forEach(m => {
+      const card = document.createElement("article");
+      card.className = "min-card";
+      card.dataset.minid = m.id;
+
+      const d = r ? MR.distToRoute(r, [m.lon, m.lat]) : null;
+      const distStr = d != null ? `${fmt(d)} km` : "";
+
+      card.innerHTML = `
+        <div class="min-card-top">
+          <span class="min-badge" data-cat="${esc(m.category)}">
+            <span class="dot"><svg viewBox="0 0 24 24"><path d="M12 3l2.5 6 6.5.5-5 4 1.5 6.5L12 17l-5.5 3 1.5-6.5-5-4 6.5-.5z"></path></svg></span>
+            <span class="tag">${esc(m.category)}</span>
+          </span>
+          <span class="min-card-sol">${esc(m.rover.split(" ")[0])} · Sol ${m.sol}</span>
+        </div>
+        <div class="min-card-main">
+          <div class="min-thumb">
+            <img src="${m.image_url}" alt="${esc(m.name)}" loading="lazy" onerror="this.onerror=null;this.src='${m.fallback_url || 'assets/basemap_relief.jpg'}'">
+          </div>
+          <div class="min-card-details">
+            <h4 class="min-card-title">${esc(m.name)}</h4>
+            <div class="min-card-formula">${esc(m.formula)}</div>
+            <div class="min-card-meta">
+              <span>${esc(m.instrument.split("/")[0])}</span>
+              ${distStr ? `<span>· a <strong>${distStr}</strong></span>` : ""}
+            </div>
+          </div>
+        </div>
+        <div class="min-card-actions">
+          <button type="button" class="min-btn-sm" data-act="details">Examinar</button>
+          <button type="button" class="min-btn-sm primary" data-act="stop" title="Añadir a las paradas de la ruta">${T.stops.includes(m.id) ? "Quitar parada" : "Fijar parada"}</button>
+          <button type="button" class="min-btn-sm" data-act="fly3d" title="Ver en relieve 3D">Volar 3D</button>
+        </div>
+      `;
+
+      card.querySelector('[data-act="details"]').addEventListener("click", ev => {
+        ev.stopPropagation();
+        openMineralModal(m);
+      });
+      card.querySelector('[data-act="stop"]').addEventListener("click", ev => {
+        ev.stopPropagation();
+        toggleMineralStop(m);
+      });
+      card.querySelector('[data-act="fly3d"]').addEventListener("click", ev => {
+        ev.stopPropagation();
+        flyToMineral(m);
+      });
+      card.addEventListener("click", () => {
+        if (S.view === "3d") {
+          MR.Scene3D.focus(m.lon, m.lat);
+        } else {
+          MR.Map.centerOn(m.lon, m.lat, 2.5);
+        }
+      });
+
+      listEl.appendChild(card);
+    });
+  }
+
+  function toggleMineralStop(m) {
+    if (T.stops.includes(m.id)) {
+      T.stops = T.stops.filter(x => x !== m.id);
+      toast(`Parada removida: ${m.name}`);
+    } else {
+      T.stops.push(m.id);
+      toast(`Parada añadida: ${m.name}`);
+    }
+    recalcRoute();
+    renderStops();
+    renderMineralsList();
+  }
+
+  function flyToMineral(m) {
+    if (S.view !== "3d") {
+      setView("3d");
+    }
+    if (MR.Scene3D && MR.Scene3D.ready) {
+      MR.Scene3D.flyTo(m.lon, m.lat, 0.8);
+    }
+  }
+
+  function openMineralModal(m) {
+    closePointUI();
+    const d = activeRoute() ? MR.distToRoute(activeRoute(), [m.lon, m.lat]) : null;
+    const distStr = d != null ? `${fmt(d)} km` : "—";
+
+    showModal(`
+      <div class="mhead">
+        <button type="button" class="modal-close-corner" data-close title="Cerrar modal" aria-label="Cerrar">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+        <div class="tag-line">
+          <span class="min-badge" data-cat="${esc(m.category)}">
+            <span class="dot"><svg viewBox="0 0 24 24"><path d="M12 3l2.5 6 6.5.5-5 4 1.5 6.5L12 17l-5.5 3 1.5-6.5-5-4 6.5-.5z"></path></svg></span>
+            <span class="tag">${esc(m.category)}</span>
+          </span>
+          <span style="color:var(--text-2)">${esc(m.rover)} · Sol ${m.sol} · Sensor: ${esc(m.camera)}</span>
+        </div>
+        <h2 class="min-modal-title">${esc(m.name)}</h2>
+        <div class="min-modal-formula-box">Fórmula química: <strong>${esc(m.formula)}</strong></div>
+      </div>
+      <div class="mbody min-modal-layout">
+        <div class="min-modal-media">
+          <div class="min-modal-photo-wrap">
+            <img src="${m.image_url}" alt="${esc(m.image_title)}" onerror="this.onerror=null;this.src='${m.fallback_url || 'assets/basemap_relief.jpg'}'">
+          </div>
+          <div class="min-modal-caption">${esc(m.image_title)}</div>
+          <a href="${m.nasa_raw_url}" target="_blank" rel="noopener noreferrer" class="min-nasa-link">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M19 19H5V5h7V3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/></svg>
+            Ver fotos crudas en archivo NASA (${m.rover.includes("Curiosity") ? "MSL" : "Mars 2020"})
+          </a>
+          <div class="min-quick-facts">
+            <div class="min-qfact"><span>Misión / Rover:</span><strong>${esc(m.rover)}</strong></div>
+            <div class="min-qfact"><span>Sol marciano:</span><strong>Sol ${m.sol}</strong></div>
+            <div class="min-qfact"><span>Instrumentos:</span><strong>${esc(m.instrument.split("/")[0])}</strong></div>
+            <div class="min-qfact"><span>Cámara:</span><strong>${esc(m.camera.split("(")[0])}</strong></div>
+            <div class="min-qfact"><span>Coordenadas:</span><strong>${m.lon.toFixed(4)}°E, ${m.lat.toFixed(4)}°N</strong></div>
+            <div class="min-qfact"><span>Elevación MOLA:</span><strong>${m.elev_m} m</strong></div>
+            <div class="min-qfact"><span>Distancia a ruta:</span><strong>${distStr}</strong></div>
+          </div>
+        </div>
+        <div class="min-modal-content">
+          <div class="min-field">
+            <span class="min-field-lbl">Resumen geológico</span>
+            <div class="min-field-val">${esc(m.summary)}</div>
+          </div>
+          <div class="min-field">
+            <span class="min-field-lbl">Estratigrafía y condiciones de formación</span>
+            <div class="min-field-val">${esc(m.geology)}</div>
+          </div>
+          <div class="min-field">
+            <span class="min-field-lbl">Verificación instrumental y firma espectral</span>
+            <div class="min-spec-box">
+              <div style="margin-bottom:6px"><strong>Instrumentos analíticos:</strong> ${esc(m.instrument)}</div>
+              <div><strong>Firma espectral orbital / in situ:</strong> ${esc(m.spectral_signature)}</div>
+            </div>
+          </div>
+          <div class="min-modal-actions">
+            <button type="button" class="btn ghost spacer" data-close>Cerrar</button>
+            <button type="button" class="btn" data-fly>Volar en 3D</button>
+            <button type="button" class="btn primary" data-stop>${T.stops.includes(m.id) ? "Quitar de paradas" : "Fijar como parada"}</button>
+          </div>
+        </div>
+      </div>
+    `, {
+      cls: "mineral-modal",
+      bind: el => {
+        el.querySelectorAll("[data-close]").forEach(b => b.addEventListener("click", closeModal));
+        el.querySelector("[data-fly]").addEventListener("click", () => {
+          closeModal();
+          flyToMineral(m);
+        });
+        el.querySelector("[data-stop]").addEventListener("click", () => {
+          closeModal();
+          toggleMineralStop(m);
+        });
+      }
+    });
+  }
+
+  // Exponer para interacción Three.js 3D
+  MR.openMineralModal = openMineralModal;
+
   function bindTop() {
     $("btnPlay").addEventListener("click", togglePlay);
     document.querySelectorAll(".speed button").forEach(b => b.addEventListener("click", () => setSpeed(+b.dataset.speed)));
@@ -137,8 +664,23 @@
     document.querySelectorAll(".rail-btn").forEach(b => b.addEventListener("click", () => togglePanel(b.dataset.panel)));
     $("spClose").addEventListener("click", () => togglePanel(null));
     $("btnReport").addEventListener("click", reportHere);
+    const regSel = $("regionSelect");
+    if (regSel) regSel.addEventListener("change", e => switchRegion(e.target.value));
+    document.querySelectorAll(".rqs-btn").forEach(b => {
+      b.addEventListener("click", () => switchRegion(b.dataset.region));
+    });
+    const btnL = $("btnLang");
+    if (btnL) btnL.addEventListener("click", toggleLanguage);
     $("exag").addEventListener("input", e => { const v = +e.target.value; $("exagOut").textContent = fmt(v, 1) + "×"; MR.Scene3D.setExag(v); });
     $("follow3d").addEventListener("change", e => MR.Scene3D.setFollow(e.target.checked));
+    const l3d = $("layer3d"); if (l3d) l3d.addEventListener("change", e => MR.Scene3D.setLayerVisible(e.target.checked));
+    const p3d = $("pins3d"); if (p3d) p3d.addEventListener("change", e => MR.Scene3D.setMineralsVisible(e.target.checked));
+    document.querySelectorAll("[data-trekbase]").forEach(b => {
+      b.addEventListener("click", () => MR.Scene3D && MR.Scene3D.setBasemap(b.dataset.trekbase));
+    });
+    document.querySelectorAll("[data-3dmode]").forEach(b => {
+      b.addEventListener("click", () => MR.Scene3D && MR.Scene3D.setViewMode(b.dataset["3dmode"]));
+    });
     $("lpToggle").addEventListener("click", () => setLeft(!$("leftPanel").classList.contains("collapsed") ? false : true));
   }
   function setLeft(open) {
@@ -184,24 +726,9 @@
       document.querySelectorAll("#baseSeg button").forEach(x => x.setAttribute("aria-checked", x === b));
       $("basemap").onload = () => sync3dTexture();
     }));
-    const list = $("layerList");
-    MR.LAYERS.forEach(L => {
-      const b = document.createElement("button"); b.className = "layer-opt"; b.setAttribute("role", "radio"); b.dataset.key = L.key;
-      const sw = L.key === "hazard" ? "repeating-linear-gradient(45deg,#C42828 0 4px,#F0963C 4px 8px)" : L.key === "none" ? "var(--panel-2)" : MR.cssRamp(L);
-      b.innerHTML = `<span class="sw" style="background:${sw}"></span><span><b>${L.name}</b><small>${L.sub}</small></span>` +
-        (L.src ? `<span class="info" tabindex="0" aria-label="Fuente">?</span>` : "<span></span>");
-      b.addEventListener("click", () => { S.layer = L.key; MR.Map.setLayer(S.layer, S.opacity); renderLegend(); sync3dTexture(); });
-      const inf = b.querySelector(".info");
-      if (inf) {
-        const show = e => { const r = inf.getBoundingClientRect(); MR.showTip(esc(L.src), r.right, r.top + 4); e.stopPropagation(); };
-        inf.addEventListener("mouseenter", show); inf.addEventListener("focus", show);
-        inf.addEventListener("mouseleave", MR.hideTip); inf.addEventListener("blur", MR.hideTip);
-        inf.addEventListener("click", e => { e.stopPropagation(); show(e); });
-      }
-      list.appendChild(b);
-    });
+    renderLayerList("gale");
     $("opacity").addEventListener("input", e => { S.opacity = +e.target.value; $("overlay").style.opacity = S.opacity; sync3dTexture(); });
-    $("chkContours").addEventListener("change", e => MR.Map.setContours(e.target.checked));
+    $("chkContours").addEventListener("change", e => { MR.Map.setContours(e.target.checked); sync3dTexture(); });
     $("chkTraverse").addEventListener("change", e => MR.Map.drawTraverse(e.target.checked));
     $("chkCrism").addEventListener("change", e => MR.Map.drawCrism(e.target.checked));
     // objetivos
@@ -213,6 +740,34 @@
       chips.appendChild(b);
     });
     $("distFilter").addEventListener("input", e => { S.distMax = +e.target.value; $("distOut").textContent = S.distMax + " km"; refreshMarkers(); renderObjList(); });
+    // minerales y búsqueda científica
+    const minSearch = $("minSearch");
+    if (minSearch) {
+      minSearch.addEventListener("input", e => {
+        mineralSearchQuery = e.target.value;
+        renderMineralsList();
+      });
+    }
+    const btnMinSci = $("btnMinSciMode");
+    if (btnMinSci) {
+      btnMinSci.addEventListener("click", () => {
+        scientificSearchMode = !scientificSearchMode;
+        btnMinSci.classList.toggle("active", scientificSearchMode);
+        toast(scientificSearchMode ? "Modo científico activado: objetivos resaltados" : "Modo científico desactivado");
+        refreshMarkers();
+        update3d();
+      });
+    }
+    renderMineralsUI();
+    // perfiles de ruta
+    document.querySelectorAll("#profileSeg button").forEach(b => {
+      b.addEventListener("click", () => setRouteProfile(b.dataset.profile));
+    });
+    document.querySelectorAll("#mobilitySeg button").forEach(b => {
+      b.addEventListener("click", () => setMobility(b.dataset.mobility));
+    });
+    const demoAlertBtn = $("btnDemoAlert");
+    if (demoAlertBtn) demoAlertBtn.addEventListener("click", triggerWeatherAlert);
     // ruta
     const sl = (id, out, key, f) => $(id).addEventListener("input", e => { MR.cfg[key] = +e.target.value; $(out).textContent = f(+e.target.value); });
     sl("riskW", "rwOut", "riskW", v => fmt(v, 1)); sl("slopeW", "swOut", "slopeW", v => fmt(v, 1)); sl("maxSlope", "msOut", "maxSlope", v => v + "°");
@@ -227,9 +782,9 @@
       [["riskW", 4, "rwOut", "4"], ["slopeW", 3, "swOut", "3"], ["maxSlope", 20, "msOut", "20°"]].forEach(([i, v, o, t]) => { $(i).value = v; $(o).textContent = t; });
       T.adjusted = null; T.stops = [];
       if (T.mode === "walk") toast("En recorrido: usa Recalcular para cambiar la ruta desde tu posición");
-      afterRouteChange(); renderStops();
+      afterRouteChange(); renderStops(); renderMineralsList();
     });
-    renderLegend(); renderObjList(); renderStops();
+    renderLegend(); renderObjList(); renderStops(); renderProfileMetrics();
   }
   function renderLegend() {
     const L = MR.LAYERS.find(l => l.key === S.layer);
@@ -246,7 +801,7 @@
   }
   function filteredObjectives() {
     const r = activeRoute() || T.baseRoute;
-    return D.objetivos.filter(o => S.types[o.type] && (S.distMax >= 60 || MR.distToRoute(r, [o.lon, o.lat]) <= S.distMax));
+    return regionObjectives().filter(o => S.types[o.type] && (S.distMax >= 60 || MR.distToRoute(r, [o.lon, o.lat]) <= S.distMax));
   }
   function renderObjList() {
     const ul = $("objList"); ul.innerHTML = "";
@@ -264,20 +819,27 @@
   }
   function renderStops() {
     const box = $("stopList"); box.innerHTML = "";
-    const cands = D.objetivos.filter(o => !["base", "meta"].includes(o.type) && o.id !== T.crew.goalId)
-      .concat(T.missions.filter(m => m.origin === "propia" && m.status !== "completada").map(m => ({ id: m.id, name: m.name, lon: m.lon, lat: m.lat })));
+    const minStops = (window.MARS_MINERALS || []).filter(m => T.stops.includes(m.id)).map(m => ({ id: m.id, name: m.name, lon: m.lon, lat: m.lat }));
+    const cands = regionObjectives().filter(o => !["base", "meta"].includes(o.type) && o.id !== T.crew.goalId)
+      .concat(T.missions.filter(m => m.origin === "propia" && m.status !== "completada").map(m => ({ id: m.id, name: m.name, lon: m.lon, lat: m.lat })))
+      .concat(minStops);
     cands.forEach(o => {
       const d = MR.distToRoute(T.baseRoute, [o.lon, o.lat]);
       const l = document.createElement("label");
       l.innerHTML = `<input type="checkbox"><span></span><small>${fmt(d)} km</small>`;
       l.querySelector("span").textContent = o.name;
       const cb = l.querySelector("input"); cb.checked = T.stops.includes(o.id);
-      cb.addEventListener("change", () => { T.stops = cb.checked ? T.stops.concat(o.id) : T.stops.filter(x => x !== o.id); });
+      cb.addEventListener("change", () => {
+        T.stops = cb.checked ? (T.stops.includes(o.id) ? T.stops : T.stops.concat(o.id)) : T.stops.filter(x => x !== o.id);
+        renderMineralsList();
+      });
       box.appendChild(l);
     });
   }
   function stopLL(id) {
-    const o = D.objetivos.find(x => x.id === id) || T.missions.find(x => x.id === id);
+    const o = regionObjectives().find(x => x.id === id) ||
+              T.missions.find(x => x.id === id) ||
+              (window.MARS_MINERALS && window.MARS_MINERALS.find(x => x.id === id));
     return o ? [o.lon, o.lat] : null;
   }
   function recalcRoute() {
@@ -304,14 +866,14 @@
     // con backend: se refina la misma ruta en la grilla completa de 44 m
     if (MR.API.online) {
       const trip = T, pts = [[T.baseRoute[0][0], T.baseRoute[0][1]], ...stops, goal];
-      MR.API.route(pts, MR.cfg).then(res => {
+      MR.API.route(pts, MR.cfg, T.profileMode || "segura").then(res => {
         if (!res || !res.route || trip !== T || T.mode !== "plan") return;
         T.adjusted = MR.densify(res.route); afterRouteChange(false);
-        toast(`Ruta refinada por el backend (grilla de 44 m) · ${fmt(T.adjusted[T.adjusted.length - 1][2])} km`);
+        toast(`Ruta refinada por el backend (${T.profileMode || "segura"}) · ${fmt(T.adjusted[T.adjusted.length - 1][2])} km`);
       });
     }
   }
-  function afterRouteChange(anim) { recomputeHazards(); renderRoutes(anim); renderDock(true); renderStatus(); refreshMarkers(); renderObjList(); update3d(); }
+  function afterRouteChange(anim) { recomputeHazards(); renderRoutes(anim); renderDock(true); renderStatus(); refreshMarkers(); renderObjList(); renderProfileMetrics(); update3d(); }
 
   /* =====================================================
      MAPA — rutas y marcadores
@@ -334,9 +896,24 @@
       if (o.id === T.crew.goalId) return;
       list.push({ id: o.id, type: o.type, lon: o.lon, lat: o.lat, label: o.name, onClick: () => openObjective(o) });
     });
+    // Objetivos científicos y minerales marcianos
+    const minerals = getRegionMinerals();
+    minerals.forEach(m => {
+      list.push({
+        id: m.id,
+        type: "mineral",
+        lon: m.lon,
+        lat: m.lat,
+        label: m.name,
+        icon: "mineral",
+        isMineral: true,
+        mineral: m,
+        onClick: () => openMineralModal(m)
+      });
+    });
     const g = goalObj();
-    list.push({ id: "goal", type: "meta", lon: g.lon, lat: g.lat, label: "Meta · " + g.name, cls: "labeled", onClick: () => openObjective(g) });
-    if (T.crew.goalId !== "bradbury") {
+    if (g) list.push({ id: "goal", type: "meta", lon: g.lon, lat: g.lat, label: "Meta · " + g.name, cls: "labeled", onClick: () => openObjective(g) });
+    if (currentRegion === "gale" && T.crew.goalId !== "bradbury") {
       const b = D.objetivos[0]; if (S.types.base) list.push({ id: "start", type: "base", lon: b.lon, lat: b.lat, label: b.name, onClick: () => openObjective(b) });
     }
     T.missions.forEach(m => {
@@ -444,6 +1021,18 @@
     T.findings.push(f); closePointUI(); refreshMarkers(); bump("hallazgos");
     const msg = sendToEarth(`Hallazgo · ${tn}${note ? ": " + note : ""}`, ll, "hallazgo");
     MR.API.send("hallazgos", { ...f, photo: photo ? "[img]" : null });
+    MR.API.sendReporte({
+      id: "rep_" + f.id,
+      author: T.crew.id,
+      type: "hallazgo",
+      lon: ll[0],
+      lat: ll[1],
+      elev: f.elev,
+      km: T.km,
+      text: `Hallazgo geológico [${tn}]: ${note || "Sin nota"}`,
+      attachments: { type, solTime: MR.solTime(T.simMin).label },
+      sync_status: "local"
+    });
     T.events.push({ t: T.simMin, c: "var(--nominal)", txt: `Hallazgo registrado: ${tn}` });
     toast("Guardado · enviado a la Tierra", "Deshacer", () => {
       T.findings = T.findings.filter(x => x !== f); T.log = T.log.filter(x => x !== msg);
@@ -802,7 +1391,7 @@
   function advance(dMin) {
     const R = T.route, L = R[R.length - 1][2];
     const i = MR.nearestKm(R, T.km);
-    let v = MR.walkSpeed(MR.gradeAt(R, i), R[i][6]);
+    let v = (T.mobility === "rover" ? MR.roverSpeed(R[i][4], R[i][6]) : MR.walkSpeed(MR.gradeAt(R, i), R[i][6]));
     const inZone = T.hazards.find(z => T.km >= z.startKm - 0.05 && T.km <= z.endKm + 0.05);
     if (inZone) v *= 0.6;
     T.km = Math.min(L, T.km + (v * dMin) / 60); T.simMin += dMin;
@@ -815,6 +1404,12 @@
     const h = time().hour;
     // llegada
     if (T.km >= L - 0.005) return arrive();
+    // evento meteorológico crítico reproducible a las 11:30 LTST
+    if (!T.handled["mda_storm_1130"] && time().hour === 11 && time().minute >= 30) {
+      T.handled["mda_storm_1130"] = 1;
+      triggerWeatherAlert();
+      return;
+    }
     // peligro crítico por delante (200 m)
     const z = T.hazards.find(z => !T.handled[z.id] && z.startKm - T.km <= 0.2 && z.endKm >= T.km);
     if (z) return criticalAlert(z);
@@ -1162,11 +1757,13 @@
   }
   function sync3dTexture() { if (MR.Scene3D.ready) MR.Scene3D.setTexture($("basemap"), S.layer !== "none" ? $("overlay") : null, S.opacity); }
   function update3d() {
-    if (!MR.Scene3D.ready) return;
+    if (!MR.Scene3D || !MR.Scene3D.ready) return;
     const pins = [];
-    filteredObjectives().forEach(o => pins.push({ type: o.type, lon: o.lon, lat: o.lat }));
-    T.findings.forEach(f => pins.push({ type: "hallazgo", lon: f.lon, lat: f.lat }));
-    T.missions.forEach(m => pins.push({ type: "secundaria", lon: m.lon, lat: m.lat }));
+    filteredObjectives().forEach(o => pins.push({ type: o.type, lon: o.lon, lat: o.lat, label: o.name, onClick: () => openObjective(o) }));
+    const minerals = getRegionMinerals();
+    minerals.forEach(m => pins.push({ type: "mineral", lon: m.lon, lat: m.lat, isMineral: true, mineral: m, label: m.name, onClick: () => openMineralModal(m) }));
+    T.findings.forEach(f => pins.push({ type: "hallazgo", lon: f.lon, lat: f.lat, label: f.typeName, onClick: () => openFindingCard(f) }));
+    T.missions.forEach(m => pins.push({ type: "secundaria", lon: m.lon, lat: m.lat, label: m.name, onClick: () => openMissionCard(m) }));
     MR.Scene3D.update({ route: activeRoute(), km: T.km, pos: curPos(), color: T.crew.color, pins,
       secondary: T.missions.filter(m => m.path && m.status === "aceptada").map(m => m.path) });
   }

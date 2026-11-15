@@ -6,11 +6,43 @@
   "use strict";
   const D = window.MARS_DATA;
   const MR = (window.MR = { D });
-  const [W, S, E, N] = D.bbox;
   const G = D.layers.grid;              // 300 × 300
   const R_MARS_KM = 3389.5;
   const KM_PER_DEG = (Math.PI / 180) * R_MARS_KM;
   MR.G = G; MR.WORLD = 1200;
+
+  MR.REGIONS = {
+    gale: {
+      id: "gale",
+      name: "Cráter Gale (Curiosity)",
+      rover: "Curiosity (MSL)",
+      bbox: [137.18, -5.45, 138.08, -4.55],
+      center: [137.44, -4.68],
+      basemapRelief: "assets/basemap_relief.jpg",
+      basemapColor: "assets/basemap_color.jpg",
+      demMin: D.layers.dem.min,
+      demMax: D.layers.dem.max
+    },
+    jezero: {
+      id: "jezero",
+      name: "Cráter Jezero (Perseverance)",
+      rover: "Perseverance (Mars 2020)",
+      bbox: (window.JEZERO_DATA && window.JEZERO_DATA.bbox) || [77.05, 18.05, 77.68, 18.63],
+      center: (window.JEZERO_DATA && window.JEZERO_DATA.center) || [77.365, 18.34],
+      basemapRelief: "assets/basemap_jezero_relief.jpg",
+      basemapColor: "assets/basemap_jezero_color.jpg",
+      demMin: (window.JEZERO_DATA && window.JEZERO_DATA.dem && window.JEZERO_DATA.dem.min) || -2567.2,
+      demMax: (window.JEZERO_DATA && window.JEZERO_DATA.dem && window.JEZERO_DATA.dem.max) || -1925.8
+    }
+  };
+
+  MR.setRegion = function (regionId) {
+    MR.currentRegion = regionId === "jezero" ? "jezero" : "gale";
+    MR.activeRegion = MR.REGIONS[MR.currentRegion];
+    MR.bbox = MR.activeRegion.bbox.slice();
+    MR.W = MR.bbox[0]; MR.S = MR.bbox[1]; MR.E = MR.bbox[2]; MR.N = MR.bbox[3];
+  };
+  MR.setRegion("gale");
 
   /* ---------- decodificación de capas (base64 → arreglos) ---------- */
   function decode(layer) {
@@ -25,22 +57,53 @@
   }
   MR.F = {};
   for (const k of Object.keys(D.layers)) if (k !== "grid") MR.F[k] = decode(D.layers[k]);
+  MR.J = {};
+  if (window.JEZERO_DATA && window.JEZERO_DATA.layers) {
+    for (const k of Object.keys(window.JEZERO_DATA.layers)) {
+      MR.J[k] = decode(window.JEZERO_DATA.layers[k]);
+    }
+    MR.F.jezero_dem = MR.J.dem;
+  } else if (window.JEZERO_DATA && window.JEZERO_DATA.dem) {
+    MR.F.jezero_dem = decode(window.JEZERO_DATA.dem);
+  }
 
   /* ---------- geometría ---------- */
-  MR.toWorld = (lon, lat) => [((lon - W) / (E - W)) * 1200, ((N - lat) / (N - S)) * 1200];
-  MR.fromWorld = (x, y) => [W + (x / 1200) * (E - W), N - (y / 1200) * (N - S)];
+  MR.toWorld = (lon, lat) => {
+    const [w, s, e, n] = MR.bbox || D.bbox;
+    return [((lon - w) / (e - w)) * 1200, ((n - lat) / (n - s)) * 1200];
+  };
+  MR.fromWorld = (x, y) => {
+    const [w, s, e, n] = MR.bbox || D.bbox;
+    return [w + (x / 1200) * (e - w), n - (y / 1200) * (n - s)];
+  };
   MR.cellOf = (lon, lat) => {
-    const c = Math.min(G - 1, Math.max(0, Math.floor(((lon - W) / (E - W)) * G)));
-    const r = Math.min(G - 1, Math.max(0, Math.floor(((N - lat) / (N - S)) * G)));
+    const [w, s, e, n] = MR.bbox || D.bbox;
+    const c = Math.min(G - 1, Math.max(0, Math.floor(((lon - w) / (e - w)) * G)));
+    const r = Math.min(G - 1, Math.max(0, Math.floor(((n - lat) / (n - s)) * G)));
     return [r, c];
   };
-  MR.cellCenter = (r, c) => [W + ((c + 0.5) / G) * (E - W), N - ((r + 0.5) / G) * (N - S)];
-  MR.sample = (key, lon, lat) => { const [r, c] = MR.cellOf(lon, lat); return MR.F[key][r * G + c]; };
+  MR.cellCenter = (r, c) => {
+    const [w, s, e, n] = MR.bbox || D.bbox;
+    return [w + ((c + 0.5) / G) * (e - w), n - ((r + 0.5) / G) * (n - s)];
+  };
+  MR.sample = (key, lon, lat) => {
+    const [r, c] = MR.cellOf(lon, lat);
+    if (MR.currentRegion === "jezero" && MR.J && MR.J[key]) {
+      return MR.J[key][r * G + c];
+    }
+    if (MR.currentRegion === "jezero" && key === "dem" && MR.F.jezero_dem) {
+      return MR.F.jezero_dem[r * G + c];
+    }
+    return MR.F[key] ? MR.F[key][r * G + c] : 0;
+  };
   MR.distKm = (a, b) => {
     const kx = KM_PER_DEG * Math.cos((((a[1] + b[1]) / 2) * Math.PI) / 180);
     return Math.hypot((a[0] - b[0]) * kx, (a[1] - b[1]) * KM_PER_DEG);
   };
-  MR.inBounds = (lon, lat) => lon >= W && lon <= E && lat >= S && lat <= N;
+  MR.inBounds = (lon, lat) => {
+    const [w, s, e, n] = MR.bbox || D.bbox;
+    return lon >= w && lon <= e && lat >= s && lat <= n;
+  };
   MR.fmt = (v, d = 1) => (v == null || isNaN(v) ? "—" : Number(v).toLocaleString("es-CO", { minimumFractionDigits: d, maximumFractionDigits: d }).replace(/^-/, "−"));
   MR.fmtLL = (lon, lat) => `${MR.fmt(lat, 3)}° · ${MR.fmt(lon, 3)}°`;
 
@@ -107,13 +170,78 @@
     const d = (b[2] - a[2]) * 1000;
     return d > 1 ? (b[3] - a[3]) / d : 0;
   };
-  MR.estimateHours = function (pts) {
+  MR.estimateHours = function (pts, mobility = "rover") {
     let h = 0;
     for (let i = 1; i < pts.length; i++) {
       const dk = pts[i][2] - pts[i - 1][2];
-      h += dk / MR.walkSpeed(MR.gradeAt(pts, i), pts[i][6]);
+      const speed = mobility === "rover"
+        ? MR.roverSpeed(pts[i][4], pts[i][6])
+        : MR.walkSpeed(MR.gradeAt(pts, i), pts[i][6]);
+      h += dk / speed;
     }
     return h;
+  };
+  MR.roverSpeed = function (slopeDeg, trav) {
+    const rad = ((slopeDeg || 0) * Math.PI) / 180;
+    return Math.max(1.5, 12.0 * Math.max(0.2, Math.cos(rad)) * (0.6 + 0.4 * (trav != null ? trav : 0.5)));
+  };
+  MR.SHELTERS = [
+    { id: "shelter-bradbury", name: "Bradbury Landing (Gale)", lon: 137.4416, lat: -4.5895, region: "gale" },
+    { id: "shelter-mount-sharp", name: "Mount Sharp Base (Gale)", lon: 137.8599, lat: -5.3709, region: "gale" },
+    { id: "shelter-butler", name: "Octavia Butler Landing (Jezero)", lon: 77.4508, lat: 18.4447, region: "jezero" },
+    { id: "shelter-delta", name: "Delta Front Shelter (Jezero)", lon: 77.3820, lat: 18.4550, region: "jezero" },
+  ];
+  MR.routeResources = function (pts, mobility = "rover", maxShelterDistKm = 1.0) {
+    if (!pts || pts.length < 2) return null;
+    const len = pts[pts.length - 1][2];
+    const hours = MR.estimateHours(pts, mobility);
+    const isRover = mobility === "rover";
+    const o2Capacity = isRover ? 5184 : 576; // 72h vs 8h autonomía a 72 L/h
+    const o2Consumed = hours * 72;
+    const o2Pct = Math.min(100, (o2Consumed / o2Capacity) * 100);
+
+    const battCapacity = isRover ? 45.0 : 12.0; // kWh
+    const battRate = isRover ? 3.2 : 1.5; // kWh/h
+    const battConsumed = hours * battRate;
+    const battPct = Math.min(100, (battConsumed / battCapacity) * 100);
+
+    const radRate = isRover ? 0.012 : 0.027; // mSv/h blindado vs EVA
+    const radDose = hours * radRate;
+
+    const goal = pts[pts.length - 1];
+    let nearestShelter = null, minShelterDist = Infinity;
+    MR.SHELTERS.forEach(sh => {
+      const d = MR.distKm([sh.lon, sh.lat], [goal[0], goal[1]]);
+      if (d < minShelterDist) { minShelterDist = d; nearestShelter = sh; }
+    });
+    const shelterOk = minShelterDist <= maxShelterDistKm;
+    let valid = true, rejectionReason = "";
+    if (!shelterOk) {
+      valid = false;
+      rejectionReason = `Destino sin refugio presurizado verificado (distancia mínima: ${minShelterDist.toFixed(1)} km > 1.0 km).`;
+    } else if (o2Pct > 80.0) {
+      valid = false;
+      rejectionReason = `Consumo de O₂ proyectado (${o2Pct.toFixed(1)}%) supera umbral de seguridad (reserva < 20%).`;
+    } else if (battPct > 85.0) {
+      valid = false;
+      rejectionReason = `Consumo de batería proyectado (${battPct.toFixed(1)}%) supera umbral de seguridad.`;
+    }
+
+    return {
+      length: len,
+      hours,
+      o2Pct,
+      o2Consumed,
+      o2RemainingPct: Math.max(0, 100 - o2Pct),
+      battPct,
+      battRemainingPct: Math.max(0, 100 - battPct),
+      radDose,
+      shelterOk,
+      shelterName: nearestShelter ? nearestShelter.name : "Desconocido",
+      shelterDistKm: minShelterDist,
+      valid,
+      rejectionReason,
+    };
   };
 
   /* ---------- clima (REMS de Curiosity) ----------
@@ -275,39 +403,54 @@
     };
   }
   MR.LAYERS = [
-    { key: "traversability", name: "Facilidad de paso", sub: "Predicción del modelo (0–1)", lo: "Difícil", hi: "Fácil",
+    { key: "traversability", name: "Facilidad de paso", sub: "Predicción del modelo (0–1)", lo: "Difícil", hi: "Fácil", prov: "der", provLabel: "DERIVADA",
       norm: v => v, ramp: ramp([[0, 196, 40, 40], [0.45, 240, 178, 60], [1, 18, 140, 80]]),
       src: "Bosque aleatorio entrenado con el recorrido real de Curiosity. Variables: pendiente, rugosidad, textura óptica, gradiente y térmico." },
-    { key: "hazard", name: "Zonas no recomendadas", sub: "Pendiente alta o paso difícil", lo: "", hi: "Evitar",
+    { key: "hazard", name: "Zonas no recomendadas", sub: "Pendiente alta o paso difícil", lo: "", hi: "Evitar", prov: "der", provLabel: "DERIVADA",
       src: "Celdas con pendiente sobre el umbral crítico o facilidad de paso bajo el umbral de aviso. Ajustable en Ruta → Umbrales." },
-    { key: "slope", name: "Pendiente", sub: "Grados, del DEM MOLA/HRSC", lo: "0°", hi: "30°+",
+    { key: "slope", name: "Pendiente", sub: "Grados, del DEM MOLA/HRSC", lo: "0°", hi: "30°+", prov: "der", provLabel: "DERIVADA",
       norm: v => v / 30, ramp: ramp([[0, 255, 247, 220], [0.3, 250, 200, 90], [0.6, 220, 90, 40], [1, 120, 10, 30]]),
       src: "Derivada del modelo de elevación MOLA/HRSC (200 m) remuestreado a 44 m." },
-    { key: "roughness", name: "Rugosidad", sub: "Desv. estándar local de la altura", lo: "Lisa", hi: "Rugosa",
+    { key: "roughness", name: "Rugosidad", sub: "Desv. estándar local de la altura", lo: "Lisa", hi: "Rugosa", prov: "der", provLabel: "DERIVADA",
       norm: v => v / 40, ramp: ramp([[0, 240, 240, 250], [0.5, 140, 120, 200], [1, 50, 20, 100]]),
       src: "Desviación estándar de la elevación en ventanas de 7 × 7 celdas." },
-    { key: "thermal", name: "Térmico diurno", sub: "THEMIS IR (relativo)", lo: "Frío", hi: "Cálido",
+    { key: "thermal", name: "Térmico diurno", sub: "THEMIS IR (relativo)", lo: "Frío", hi: "Cálido", prov: "obs", provLabel: "OBSERVADA",
       norm: v => v / 255, ramp: ramp([[0, 10, 10, 40], [0.35, 120, 30, 110], [0.7, 240, 110, 40], [1, 255, 240, 160]]),
       src: "Mosaico THEMIS infrarrojo diurno de 100 m (ASU JMARS). Ayuda a distinguir roca expuesta de polvo." },
-    { key: "color_index", name: "Índice de color", sub: "Viking MDIM (rojo − azul)", lo: "Azulado", hi: "Rojizo",
+    { key: "color_index", name: "Índice de color", sub: "Viking MDIM (rojo − azul)", lo: "Azulado", hi: "Rojizo", prov: "obs", provLabel: "OBSERVADA",
       norm: v => (v - D.layers.color_index.min) / (D.layers.color_index.max - D.layers.color_index.min),
       ramp: ramp([[0, 40, 90, 170], [0.5, 235, 235, 235], [1, 190, 50, 30]]),
       src: "Mosaico Viking MDIM 2.1 a color. Las anomalías señalan cambios de composición del suelo." },
-    { key: "none", name: "Sin capa", sub: "Solo mapa base", src: "" },
+    { key: "none", name: "Sin capa", sub: "Solo mapa base", src: "", prov: "", provLabel: "" },
   ];
   MR.layerRGBA = function (key) {
     const img = new ImageData(G, G);
     const L = MR.LAYERS.find(l => l.key === key);
+    if (!L) return img;
+    const isJez = MR.currentRegion === "jezero" && MR.J;
+    const dataGrid = (isJez && MR.J[key]) ? MR.J[key] : (MR.F[key] || null);
+    const slopeGrid = (isJez && MR.J.slope) ? MR.J.slope : MR.F.slope;
+    const travGrid = (isJez && MR.J.traversability) ? MR.J.traversability : MR.F.traversability;
+
     for (let i = 0; i < G * G; i++) {
-      let rgb, a = 255;
+      let rgb = [0, 0, 0], a = 255;
       if (key === "hazard") {
-        const bad = MR.F.slope[i] > MR.cfg.critSlope, low = MR.F.traversability[i] < MR.cfg.travThr, blk = MR.F.blocked[i] > 0.5;
+        const bad = slopeGrid ? slopeGrid[i] > MR.cfg.critSlope : false;
+        const low = travGrid ? travGrid[i] < MR.cfg.travThr : false;
+        const blk = (!isJez && MR.F.blocked) ? MR.F.blocked[i] > 0.5 : (slopeGrid && slopeGrid[i] > 20);
         if (blk) rgb = [120, 0, 20];
         else if (bad) rgb = [196, 40, 40];
         else if (low) { rgb = [240, 150, 40]; a = 200; }
         else { rgb = [0, 0, 0]; a = 0; }
-      } else rgb = L.ramp(L.norm(MR.F[key][i]));
-      img.data[i * 4] = rgb[0]; img.data[i * 4 + 1] = rgb[1]; img.data[i * 4 + 2] = rgb[2]; img.data[i * 4 + 3] = a;
+      } else if (dataGrid) {
+        rgb = L.ramp(L.norm(dataGrid[i]));
+      } else {
+        a = 0;
+      }
+      img.data[i * 4] = rgb[0];
+      img.data[i * 4 + 1] = rgb[1];
+      img.data[i * 4 + 2] = rgb[2];
+      img.data[i * 4 + 3] = a;
     }
     return img;
   };
