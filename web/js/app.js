@@ -179,6 +179,8 @@
       sync3dTexture();
       const p = curPos();
       if (p) MR.Scene3D.focus(p[0], p[1]);
+    } else if (S.view === "globe" && MR.Globe3D && MR.Globe3D.ready) {
+      MR.Globe3D.goToRegion(regionId);
     }
 
     renderMineralsUI();
@@ -681,6 +683,36 @@
     document.querySelectorAll("[data-3dmode]").forEach(b => {
       b.addEventListener("click", () => MR.Scene3D && MR.Scene3D.setViewMode(b.dataset["3dmode"]));
     });
+
+    // Controles del Planeta 3D Global
+    const gExag = $("globeExag");
+    if (gExag) {
+      gExag.addEventListener("input", e => {
+        const val = +e.target.value;
+        const out = $("globeExagVal"); if (out) out.textContent = val + "×";
+        if (MR.Globe3D && MR.Globe3D.ready) MR.Globe3D.setExag(val);
+      });
+    }
+    const btnMola = $("btnGlobeMola"), btnVik = $("btnGlobeViking");
+    if (btnMola && btnVik) {
+      btnMola.addEventListener("click", () => {
+        btnMola.classList.add("active"); btnVik.classList.remove("active");
+        if (MR.Globe3D && MR.Globe3D.ready) MR.Globe3D.setLayer("mola");
+      });
+      btnVik.addEventListener("click", () => {
+        btnVik.classList.add("active"); btnMola.classList.remove("active");
+        if (MR.Globe3D && MR.Globe3D.ready) MR.Globe3D.setLayer("viking");
+      });
+    }
+    document.querySelectorAll("[data-globe-go]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const [lon, lat, h] = btn.dataset.globeGo.split(",").map(Number);
+        if (MR.Globe3D && MR.Globe3D.ready) MR.Globe3D.flyTo(lon, lat, h);
+      });
+    });
+    const jumpG = $("btnJumpGlobe");
+    if (jumpG) jumpG.addEventListener("click", () => setView("globe"));
+
     $("lpToggle").addEventListener("click", () => setLeft(!$("leftPanel").classList.contains("collapsed") ? false : true));
   }
   function setLeft(open) {
@@ -1742,18 +1774,38 @@
   }
 
   /* =====================================================
-     VISTAS: 2D / 3D
+     VISTAS: 2D / 3D / PLANETA 3D
      ===================================================== */
   function setView(v) {
-    if (v === "3d" && !window.THREE) { toast("Three.js no se pudo cargar: la vista 3D no está disponible"); return; }
+    if ((v === "3d" || v === "globe") && !window.THREE) {
+      toast("Three.js no se pudo cargar: la vista 3D no está disponible");
+      return;
+    }
     S.view = v;
     document.querySelectorAll(".viewswitch button").forEach(b => b.setAttribute("aria-checked", b.dataset.view === v));
-    $("map").hidden = v !== "2d"; $("map3d").hidden = v !== "3d"; $("ctl3d").hidden = v !== "3d"; $("zoomCtl").hidden = v !== "2d";
+    $("map").hidden = v !== "2d";
+    $("map3d").hidden = v !== "3d";
+    const mg = $("mapGlobe"); if (mg) mg.hidden = v !== "globe";
+    $("ctl3d").hidden = v !== "3d";
+    const cg = $("ctlGlobe"); if (cg) cg.hidden = v !== "globe";
+    $("zoomCtl").hidden = v !== "2d";
     closePointUI();
+
     if (v === "3d") {
+      if (MR.Globe3D && MR.Globe3D.ready) MR.Globe3D.stop();
       MR.Scene3D.init(); sync3dTexture(); update3d(); MR.Scene3D.start();
       const p = curPos(); if (p) MR.Scene3D.focus(p[0], p[1]);
-    } else MR.Scene3D.stop();
+    } else if (v === "globe") {
+      if (MR.Scene3D && MR.Scene3D.ready) MR.Scene3D.stop();
+      if (MR.Globe3D) {
+        MR.Globe3D.init();
+        MR.Globe3D.start();
+        MR.Globe3D.goToRegion(currentRegion);
+      }
+    } else {
+      if (MR.Scene3D && MR.Scene3D.ready) MR.Scene3D.stop();
+      if (MR.Globe3D && MR.Globe3D.ready) MR.Globe3D.stop();
+    }
   }
   function sync3dTexture() { if (MR.Scene3D.ready) MR.Scene3D.setTexture($("basemap"), S.layer !== "none" ? $("overlay") : null, S.opacity); }
   function update3d() {

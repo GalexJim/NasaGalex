@@ -246,9 +246,38 @@ h2, h3 { margin: 0; }
 .btn-global3d {
   display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 6px;
   font-size: 12px; font-weight: 600; color: var(--accent); background: var(--panel-2);
-  border: 1px solid var(--border); text-decoration: none; transition: background .15s;
+  border: 1px solid var(--border); text-decoration: none; cursor: pointer; transition: background .15s;
 }
 .btn-global3d:hover { background: var(--accent); color: #fff; }
+
+/* controles planetarios 3D Global */
+.ctl-globe {
+  max-width: 95vw; flex-wrap: wrap; justify-content: center; gap: 10px 14px;
+}
+.globe-layers {
+  display: inline-flex; background: var(--panel-2); border-radius: 6px; padding: 2px; border: 1px solid var(--border);
+}
+.btn-globe-layer {
+  border: 0; background: transparent; padding: 4px 10px; border-radius: 4px; font: 600 11px var(--f-ui);
+  color: var(--text-2); cursor: pointer; transition: background .15s, color .15s;
+}
+.btn-globe-layer.active {
+  background: var(--action); color: #fff;
+}
+.loc-shortcuts {
+  display: inline-flex; gap: 4px; flex-wrap: wrap; align-items: center;
+}
+.loc-btn {
+  border: 1px solid var(--border); background: var(--panel-2); color: var(--text); padding: 4px 9px;
+  border-radius: 5px; font: 600 11px var(--f-ui); cursor: pointer; transition: all .15s;
+}
+.loc-btn:hover {
+  background: var(--accent); color: #fff; border-color: var(--accent);
+}
+.globe-coords {
+  font: 600 12px var(--f-num); color: var(--text-2); background: rgba(0,0,0,0.35); padding: 4px 9px;
+  border-radius: 5px; border: 1px solid var(--border); letter-spacing: 0.3px;
+}
 
 /* selector de región e idioma */
 .region-picker { display: flex; align-items: center; margin-left: 8px; }
