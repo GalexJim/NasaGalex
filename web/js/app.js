@@ -1812,6 +1812,14 @@
       crSec.hidden = v === "globe";
     }
 
+    const dockEl = $("dock");
+    if (dockEl) {
+      if (v === "globe") dockEl.hidden = true;
+      else if (T.mode === "walk" || T.mode === "plan") dockEl.hidden = false;
+    }
+    const repBtn = $("btnReport");
+    if (repBtn) repBtn.hidden = v === "globe";
+
     if (v === "3d") {
       if (MR.Globe3D && MR.Globe3D.ready) MR.Globe3D.stop();
       MR.Scene3D.init(); sync3dTexture(); update3d(); MR.Scene3D.start();
