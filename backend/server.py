@@ -130,6 +130,8 @@ def save_telemetria(b):
     doc = {"crew": _crew(b.get("crew")), "t": _num(b.get("t"), 0, 1e7), "km": _num(b.get("km"), 0, 1000),
            "lon": _num(b.get("lon"), 130, 145), "lat": _num(b.get("lat"), -10, 0), "elev": _num(b.get("elev")),
            "clima": {k: _num(wx.get(k)) for k in ("air", "ground", "uv", "rh", "p") if k in wx}}
+    if b.get("dosis_msv") is not None:  # dosis EVA acumulada del viaje (modelo simplificado, mSv)
+        doc["dosis_msv"] = _num(b.get("dosis_msv"), 0, 1e6)
     docs.insert("telemetria", doc)
 
 

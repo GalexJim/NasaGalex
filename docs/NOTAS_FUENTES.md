@@ -134,8 +134,27 @@ Surgieron al revisar `core.js`, `app.js` y los datos. Son hechos de la revisión
 | Supuesto | Dónde está | Estado |
 |---|---|---|
 | Dosis EVA 0,027 mSv/h | `core.js` | Respaldado (≈ 0,65 mSv/día, Simonsen) |
-| Dosis rover 0,012 mSv/h | `core.js` | **Sin fuente → rotular «supuesto»** |
+| Dosis rover 0,012 mSv/h (× 0,44 frente a caminar) | `core.js` (`MR.radiation.P.roverFactor`) | Rotulado «supuesto» en la interfaz (Fase 1) |
 | Jornada EVA 08:00–17:00 | `app.js` | Sin fuente → «supuesto configurable» (Fase 3) |
 | Factor 0,55 del traje y 0,35 por terreno en `walkSpeed` | `core.js:164` | Sin fuente → «supuesto» (Fase 3) |
 | O₂ 72 L/h, 576 L (8 h) para EVA; batería 12 kWh | `core.js:199–204` | Sin fuente → «supuesto» |
 | Veto de pendiente 20° | `core.js:134` | Decisión de diseño del planificador, no un límite medido |
+
+## Modelo de radiación de la Fase 1: qué es fuente y qué es supuesto
+
+Implementado en `MR.radiation` (`web/js/core.js`). La interfaz rotula cada parámetro como FUENTE o SUPUESTO en Condiciones → Radiación.
+
+| Parámetro | Tipo | Origen |
+|---|---|---|
+| Tasa base 0,65 mSv/día | Fuente | Simonsen 2024 (MSL-RAD, piso de Gale); Tasoula et al. citan 0,7 |
+| Atmósfera de referencia ≈ 23 g/cm² | Fuente | Simonsen 2024 |
+| 20 % de la dosis por albedo (no lo tapa el relieve) | Fuente | Simonsen 2024 |
+| Escala de altura 11,1 km | Aproximación del prototipo | Ya usada para la presión en `MR.weather` |
+| Sensibilidad a la altura (+50 % sin atmósfera) | **Supuesto** | Solo la dirección está respaldada |
+| Blindaje por cielo visible del DEM | **Supuesto** | Geometría simple a 177 m por celda |
+| Rover presurizado × 0,44 | **Supuesto** | Heredado del prototipo |
+| Evento solar × 40 durante 36 h | **Supuesto** | Compatible con ×10–×100 medido en tránsito y con 40 mSv de referencia sin blindaje |
+| Sin dosis dentro del refugio | **Supuesto** | Simplificación |
+| Umbral de alerta 5 mSv por jornada | **Supuesto** | Umbral operativo de la app, no un límite de la NASA |
+
+Solo vale para Gale: en Jezero se usa la tasa base sin ajuste por altura ni relieve.

@@ -131,7 +131,8 @@
   };
 
   /* ---------- configuración global (umbrales y pesos) ---------- */
-  MR.cfg = { riskW: 4, slopeW: 3, maxSlope: 20, caution: 8, critSlope: 15, travThr: 0.25 };
+  // radThr: umbral de dosis EVA por jornada (mSv). SUPUESTO operativo de la app, no un límite de la NASA.
+  MR.cfg = { riskW: 4, slopeW: 3, maxSlope: 20, caution: 8, critSlope: 15, travThr: 0.25, radThr: 5 };
 
   /* ---------- zonas de peligro sobre una ruta ---------- */
   MR.hazardZones = function (pts, crit = MR.cfg.critSlope) {
@@ -205,8 +206,7 @@
     const battConsumed = hours * battRate;
     const battPct = Math.min(100, (battConsumed / battCapacity) * 100);
 
-    const radRate = isRover ? 0.012 : 0.027; // mSv/h blindado vs EVA
-    const radDose = hours * radRate;
+    const radDose = MR.radiation.routeDose(pts, mobility); // mSv, modelo simplificado (ver MR.radiation)
 
     const goal = pts[pts.length - 1];
     let nearestShelter = null, minShelterDist = Infinity;
@@ -242,6 +242,78 @@
       valid,
       rejectionReason,
     };
+  };
+
+  /* ---------- radiación: modelo SIMPLIFICADO (no es una medición) ----------
+     Índice relativo de exposición: 1,00 = suelo del cráter a cielo abierto.
+       índice = factor_altura × factor_relieve
+       factor_altura  = 1 + s·(1 − columna/columna_ref)   (menos atmósfera encima → más dosis)
+       factor_relieve = a + (1 − a)·SVF                    (SVF = fracción de cielo visible del DEM)
+     Tasa de dosis = tasa_base × índice × (factor rover) × (multiplicador de evento solar).
+     Cada parámetro dice si viene de una fuente o es un SUPUESTO (ver RAD.ASSUMPTIONS). */
+  const RAD = (MR.radiation = {});
+  RAD.P = {
+    baseMsvDay: 0.65,              // FUENTE: MSL-RAD en el piso de Gale ≈ 0,64–0,7 mSv/día (Simonsen 2024; Tasoula et al.)
+    refElev: -4500, refColumn: 23, // FUENTE: ≈ 23 g/cm² de CO₂ sobre el piso de Gale (Simonsen 2024)
+    scaleH: 11100,                 // escala de altura de la presión que ya usa el clima del prototipo (aproximación)
+    elevSens: 0.5,                 // SUPUESTO: cuánto sube la dosis al perder atmósfera. Solo la dirección está respaldada
+    albedoFrac: 0.2,               // FUENTE: neutrones de albedo ≈ 20 % de la dosis en superficie (Simonsen 2024); no los tapa el relieve
+    roverFactor: 0.012 / 0.027,    // SUPUESTO: blindaje del rover presurizado respecto a caminar con traje
+    speMult: 40,                   // SUPUESTO: multiplicador de la tasa durante un evento solar (MSL-RAD en tránsito: ×10 a ×100)
+    speHours: 36,                  // SUPUESTO: duración del evento de demostración
+  };
+  RAD.baseRate = RAD.P.baseMsvDay / 24; // mSv/h
+  RAD.ASSUMPTIONS = [
+    { k: "Tasa base", v: "0,65 mSv/día (≈ 27 µSv/h)", kind: "fuente", n: "MSL-RAD en el piso de Gale, Simonsen (NASA, 2024)." },
+    { k: "Atmósfera en el piso de Gale", v: "≈ 23 g/cm²", kind: "fuente", n: "Simonsen (NASA, 2024)." },
+    { k: "Albedo del suelo", v: "20 % de la dosis", kind: "fuente", n: "Neutrones que vienen del suelo: el relieve no los frena." },
+    { k: "Sensibilidad a la altura", v: "+50 % si no hubiera atmósfera", kind: "supuesto", n: "Solo se sabe que menos atmósfera da más dosis; el tamaño del efecto no está en las fuentes del repo." },
+    { k: "Blindaje del relieve", v: "cielo visible del DEM (177 m/celda)", kind: "supuesto", n: "Simplificación geométrica; ignora paredes del cráter fuera del recuadro." },
+    { k: "Rover presurizado", v: "× 0,44 frente a caminar", kind: "supuesto", n: "Valor heredado del prototipo, sin fuente." },
+    { k: "Evento solar (demo)", v: `× ${RAD.P.speMult} durante ${RAD.P.speHours} h`, kind: "supuesto", n: "Orden de magnitud coherente con un evento de referencia de 40 mSv sin blindaje (Simonsen) y con saltos de ×10 a ×100 medidos en tránsito." },
+    { k: "Dentro del refugio", v: "no se suma dosis", kind: "supuesto", n: "El modelo solo cuenta horas al aire libre." },
+    { k: "Umbral de alerta", v: "5 mSv por jornada (configurable)", kind: "supuesto", n: "Umbral operativo de la app, mucho menor que los límites de la NASA (250 mSv por evento solar; 600 mSv de carrera)." },
+  ];
+  (function buildRadiationIndex() {
+    const Z = MR.F.dem; if (!Z) return;
+    const b = MR.REGIONS.gale.bbox, midLat = (b[1] + b[3]) / 2, midLon = (b[0] + b[2]) / 2;
+    const cw = MR.distKm([b[0], midLat], [b[2], midLat]) * 1000 / G, ch = MR.distKm([midLon, b[1]], [midLon, b[3]]) * 1000 / G;
+    const DIRS = [[-1, 0, ch], [1, 0, ch], [0, -1, cw], [0, 1, cw], [-1, -1, Math.hypot(cw, ch)], [-1, 1, Math.hypot(cw, ch)], [1, -1, Math.hypot(cw, ch)], [1, 1, Math.hypot(cw, ch)]];
+    const K = 36, out = new Float32Array(G * G), P = RAD.P;
+    let lo = Infinity, hi = -Infinity;
+    for (let r = 0; r < G; r++) for (let c = 0; c < G; c++) {
+      const i = r * G + c, z0 = Z[i]; let sinSum = 0;
+      for (const [dr, dc, step] of DIRS) {
+        let maxT = 0;
+        for (let k = 1; k <= K; k++) {
+          const rr = r + dr * k, cc = c + dc * k; if (rr < 0 || cc < 0 || rr >= G || cc >= G) break;
+          const t = (Z[rr * G + cc] - z0) / (k * step); if (t > maxT) maxT = t;
+        }
+        sinSum += maxT / Math.sqrt(1 + maxT * maxT);
+      }
+      const svf = 1 - sinSum / DIRS.length;
+      const elevF = 1 + P.elevSens * (1 - Math.exp(-(z0 - P.refElev) / P.scaleH));
+      const v = elevF * (P.albedoFrac + (1 - P.albedoFrac) * svf);
+      out[i] = v; if (v < lo) lo = v; if (v > hi) hi = v;
+    }
+    MR.F.radiation = out; RAD.range = [lo, hi];
+  })();
+  // índice en un punto; fuera de Gale no hay modelo (la columna de atmósfera de referencia es la de Gale)
+  RAD.index = (lon, lat) => (MR.currentRegion === "gale" && MR.F.radiation ? MR.sample("radiation", lon, lat) : 1);
+  RAD.speActive = (spe, simMin) => !!spe && simMin >= spe.start && simMin < spe.end;
+  RAD.startSpe = simMin => ({ start: simMin, end: simMin + RAD.P.speHours * 60 });
+  // tasa de dosis (mSv/h) de quien está al aire libre en el punto p = [lon, lat, …]
+  RAD.rate = (p, mobility, spe, simMin) => RAD.baseRate * RAD.index(p[0], p[1])
+    * (mobility === "rover" ? RAD.P.roverFactor : 1) * (RAD.speActive(spe, simMin) ? RAD.P.speMult : 1);
+  // dosis prevista del recorrido solo por GCR (sin eventos solares), integrada a lo largo de la ruta
+  RAD.routeDose = function (pts, mobility = "rover") {
+    let dose = 0;
+    for (let i = 1; i < pts.length; i++) {
+      const dk = pts[i][2] - pts[i - 1][2];
+      const sp = mobility === "rover" ? MR.roverSpeed(pts[i][4], pts[i][6]) : MR.walkSpeed(MR.gradeAt(pts, i), pts[i][6]);
+      dose += (dk / sp) * RAD.rate(pts[i], mobility, null, 0);
+    }
+    return dose;
   };
 
   /* ---------- clima (REMS de Curiosity) ----------
@@ -421,6 +493,10 @@
       norm: v => (v - D.layers.color_index.min) / (D.layers.color_index.max - D.layers.color_index.min),
       ramp: ramp([[0, 40, 90, 170], [0.5, 235, 235, 235], [1, 190, 50, 30]]),
       src: "Mosaico Viking MDIM 2.1 a color. Las anomalías señalan cambios de composición del suelo." },
+    { key: "radiation", name: "Radiación", sub: "Índice relativo de exposición", lo: "Menor", hi: "Mayor", prov: "sim", provLabel: "SIMPLIFICADO",
+      norm: v => { const r = MR.radiation.range; return (v - r[0]) / Math.max(1e-6, r[1] - r[0]); },
+      ramp: ramp([[0, 235, 247, 235], [0.45, 250, 222, 110], [1, 170, 30, 110]]),
+      src: "Modelo simplificado, no una medición. 1,00 = suelo del cráter a cielo abierto (≈ 0,65 mSv/día medido por MSL-RAD; Simonsen, NASA 2024). Sube con la altura (menos atmósfera encima) y baja donde el relieve tapa el cielo. El tamaño de esos dos efectos es un SUPUESTO." },
     { key: "none", name: "Sin capa", sub: "Solo mapa base", src: "", prov: "", provLabel: "" },
   ];
   MR.layerRGBA = function (key) {

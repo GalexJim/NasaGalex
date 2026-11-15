@@ -32,6 +32,8 @@
       findings: [], missions: [], log: [], ai: [], handled: {}, events: [], proposed: {},
       unread: { misiones: 1, bitacora: 0, hallazgos: 0 }, briefed: false, wx: null, lastWx: -1e9,
       lastTele: -1e9, flags: {}, alerts: 0, detours: 0, hazards: [], lows: [], stops: [], measure: null,
+      // radiación (modelo simplificado): dosis EVA acumulada, por sol, y evento solar activo si lo hay
+      rad: { total: 0, bySol: {}, spe: null, crit: {}, flags: {} }, returning: null,
     };
   }
   const trips = {}; CREW.forEach(c => (trips[c.id] = newTrip(c)));
@@ -82,6 +84,12 @@
      ARRANQUE
      ===================================================== */
   function init() {
+    // imágenes con respaldo (la CSP no permite onerror en línea); 'error' no burbujea, por eso captura
+    document.addEventListener("error", e => {
+      const im = e.target;
+      if (im && im.tagName === "IMG" && im.dataset.fallback && !im.dataset.fbDone) { im.dataset.fbDone = "1"; im.src = im.dataset.fallback; }
+    }, true);
+    MR.cfg.radThr = +MR.store.get("radThr", MR.cfg.radThr) || MR.cfg.radThr;
     // tema y movimiento recordados
     const th = MR.store.get("theme", matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
     document.documentElement.dataset.theme = th;
@@ -109,7 +117,7 @@
     }
     const initModal = urlParams.get("modal");
     const initTab = urlParams.get("tab");
-    if (initTab === "atm" || initTab === "ter" || initTab === "mod") dashTab = initTab;
+    if (initTab === "atm" || initTab === "ter" || initTab === "mod" || initTab === "rad") dashTab = initTab;
     MR.API.init();
     requestAnimationFrame(loop);
     if (initModal === "conditions") {
@@ -514,7 +522,7 @@
         </div>
         <div class="min-card-main">
           <div class="min-thumb">
-            <img src="${m.image_url}" alt="${esc(m.name)}" loading="lazy" onerror="this.onerror=null;this.src='${m.fallback_url || 'assets/basemap_relief.jpg'}'">
+            <img src="${m.image_url}" alt="${esc(m.name)}" loading="lazy" data-fallback="${esc(m.fallback_url || 'assets/basemap_relief.jpg')}">
           </div>
           <div class="min-card-details">
             <h4 class="min-card-title">${esc(m.name)}</h4>
@@ -609,7 +617,7 @@
       <div class="mbody min-modal-layout">
         <div class="min-modal-media">
           <div class="min-modal-photo-wrap">
-            <img src="${m.image_url}" alt="${esc(m.image_title)}" onerror="this.onerror=null;this.src='${m.fallback_url || 'assets/basemap_relief.jpg'}'">
+            <img src="${m.image_url}" alt="${esc(m.image_title)}" data-fallback="${esc(m.fallback_url || 'assets/basemap_relief.jpg')}">
           </div>
           <div class="min-modal-caption">${esc(m.image_title)}</div>
           <a href="${m.nasa_raw_url}" target="_blank" rel="noopener noreferrer" class="min-nasa-link">
@@ -868,7 +876,8 @@
         <span><i class="sq" style="--c:#F0963C"></i>Facilidad &lt; ${fmt(MR.cfg.travThr, 2)} (aviso)</span></div>`;
       return;
     }
-    $("legend").innerHTML = `<div class="bar" style="background:${MR.cssRamp(L)}"></div><div class="ends"><span>${L.lo}</span><span>${L.hi}</span></div>`;
+    $("legend").innerHTML = `<div class="bar" style="background:${MR.cssRamp(L)}"></div><div class="ends"><span>${L.lo}</span><span>${L.hi}</span></div>` +
+      (L.key === "radiation" ? `<div class="legend-note"><span class="tag-sup">SIMPLIFICADO</span> × ${fmt(MR.radiation.range[0], 2)} a × ${fmt(MR.radiation.range[1], 2)} · 1,00 = cielo abierto en el piso del cráter</div>` : "");
   }
   function filteredObjectives() {
     const r = activeRoute() || T.baseRoute;
@@ -1336,6 +1345,93 @@
   }
 
   /* ---------- alerta crítica ---------- */
+  /* =====================================================
+     RADIACIÓN — dosis EVA acumulada, avisos y alerta crítica
+     Modelo simplificado (ver MR.radiation en core.js): solo cuenta las horas al aire libre.
+     ===================================================== */
+  function accrueDose(dMin) {
+    const p = curPos(); if (!p) return;
+    const d = MR.radiation.rate(p, T.mobility, T.rad.spe, T.simMin) * dMin / 60;
+    T.rad.total += d; const sol = time().sol; T.rad.bySol[sol] = (T.rad.bySol[sol] || 0) + d;
+  }
+  const radToday = () => T.rad.bySol[time().sol] || 0;
+  function openRadiationPanel() { dashTab = "rad"; openDashboard(); }
+  // Devuelve true si abrió la alerta crítica (la simulación queda en pausa).
+  function checkRadiation() {
+    const R = T.rad, sol = time().sol, day = radToday(), thr = MR.cfg.radThr, P = MR.radiation.P;
+    const on = MR.radiation.speActive(R.spe, T.simMin);
+    if (on && !R.flags["spe" + sol]) {
+      const first = !R.flags.speSeen; R.flags["spe" + sol] = 1; R.flags.speSeen = 1;
+      T.events.push({ t: T.simMin, c: "var(--caution)", txt: first ? "Evento solar detectado" : "Evento solar sigue activo" });
+      logSys(`${first ? "Evento solar detectado" : "El evento solar sigue activo"}: la dosis al aire libre se multiplica por ${P.speMult} (modelo simplificado, supuesto).`);
+      banner({ kind: "warn", title: first ? "Evento solar detectado" : "Evento solar sigue activo", sub: `Dosis ×${P.speMult} al aire libre · umbral de la jornada ${fmt(thr, 1)} mSv`, onClick: openRadiationPanel, ttl: 9000 });
+    }
+    if (!on && R.spe && R.flags.speSeen && !R.flags.speEnd) {
+      R.flags.speEnd = 1; T.events.push({ t: T.simMin, c: "var(--nominal)", txt: "Evento solar terminado" });
+      banner({ kind: "ok", title: "Evento solar terminado", sub: "La tasa de dosis vuelve a su nivel base.", ttl: 6000 });
+    }
+    if (day >= thr * 0.5 && day < thr && !R.flags["warn" + sol]) {
+      R.flags["warn" + sol] = 1;
+      logSys(`Aviso de radiación: dosis EVA de hoy ${fmt(day, 2)} mSv (50 % del umbral de ${fmt(thr, 1)} mSv).`);
+      banner({ kind: "warn", title: "Dosis de radiación al 50 % del umbral", sub: `${fmt(day, 2)} de ${fmt(thr, 1)} mSv hoy · toca para ver detalles`, onClick: openRadiationPanel, ttl: 8000 });
+    }
+    const lvl = Math.floor(day / thr);
+    if (!T.returning && lvl >= 1 && lvl > (R.crit[sol] || 0)) { R.crit[sol] = lvl; radiationAlert(day); return true; }
+    return false;
+  }
+  function nearestShelter(p) {
+    let best = null;
+    MR.SHELTERS.filter(s => s.region === currentRegion).forEach(s => { const d = MR.distKm(p, [s.lon, s.lat]); if (!best || d < best.d) best = { s, d }; });
+    return best;
+  }
+  function radiationAlert(day) {
+    T.playing = false; renderStatus(); T.alerts++;
+    if (S.panel) togglePanel(null);
+    $("stageCard").hidden = true;
+    const p = curPos(), thr = MR.cfg.radThr, on = MR.radiation.speActive(T.rad.spe, T.simMin);
+    const rate = MR.radiation.rate(p, T.mobility, T.rad.spe, T.simMin);
+    const near = nearestShelter(p);
+    const back = near ? MR.astar([p[0], p[1]], [near.s.lon, near.s.lat], {}) : null;
+    const backH = back ? MR.estimateHours(back, T.mobility) : null;
+    const backDose = back ? MR.radiation.routeDose(back, T.mobility) * (on ? MR.radiation.P.speMult : 1) : null;
+    T.events.push({ t: T.simMin, c: "var(--danger)", txt: `Alerta de radiación: ${fmt(day, 1)} mSv hoy` });
+    logSys(`ALERTA DE RADIACIÓN: dosis EVA de hoy ${fmt(day, 2)} mSv, umbral ${fmt(thr, 1)} mSv${on ? " (evento solar activo)" : ""}.`);
+    MR.API.sendReporte({ id: uid("rep_rad_"), author: T.crew.id, type: "alerta_radiacion", lon: p[0], lat: p[1], elev: p[3] || 0, km: T.km,
+      text: `Alerta de radiación: ${fmt(day, 2)} mSv en la jornada (umbral ${fmt(thr, 1)} mSv)`, attachments: { dose_msv: day, thr_msv: thr, spe: on, simMin: T.simMin }, sync_status: "local" });
+    showModal(`<div class="mhead"><div class="tag-line"><span class="tg alert">Alerta crítica de radiación · simulación en pausa</span></div>
+      <h2>${MR.ICONS.warn}Dosis de la jornada sobre el umbral</h2></div>
+      <div class="mbody">${factsHtml([[fmt(day, 1) + " mSv", "dosis EVA de hoy"], [fmt(thr, 1) + " mSv", "umbral de la jornada"], [fmt(rate * 1000, 0) + " µSv/h", "tasa ahora"],
+        [near ? fmt(near.d, 1) + " km" : "—", near ? esc(near.s.name) : "refugio"]])}
+      <div class="alt">${on ? "<b>Evento solar en curso.</b> Los protones de más de 30 MeV pueden atravesar el traje; las agencias recomiendan retrasar o abortar la EVA y refugiarse." : "<b>Sin evento solar activo.</b> Superaste el umbral que configuraste por acumulación de horas al aire libre."}
+        ${back ? `<br>Volver al refugio: ≈ ${fmt(backH, 1)} h y ≈ ${fmt(backDose, 2)} mSv más.` : "<br>No se encontró un camino al refugio desde aquí."}</div>
+      <div class="who" style="margin-top:8px"><span class="tag-sup">SUPUESTO</span> Modelo simplificado: no es una medición. Umbral configurable en Condiciones → Radiación.</div>
+      <div class="actions"><button class="btn danger spacer" data-ab>Abortar</button><button class="btn" data-p>Pausar</button><button class="btn primary" data-b ${back ? "" : "disabled"}>Volver al refugio</button></div></div>`, {
+      cls: "critical", dismiss: false,
+      bind: m => {
+        m.querySelector("[data-p]").addEventListener("click", () => { closeModal(); logSys("Radiación: la tripulación pausa la EVA."); banner({ kind: "warn", title: "Simulación en pausa", sub: "Sigue al aire libre: la dosis acumulará si reanudas. Pulsa ▶ para continuar.", ttl: 6000 }); });
+        m.querySelector("[data-ab]").addEventListener("click", () => confirmAbort(() => radiationAlert(day)));
+        m.querySelector("[data-b]").addEventListener("click", () => { closeModal(); returnToShelter(near.s, back); });
+      },
+    });
+  }
+  function returnToShelter(sh, back) {
+    const p = curPos(), i = MR.nearestKm(T.route, T.km);
+    T.route = MR.withKm(T.route.slice(0, i).concat([p], back.slice(1)));
+    T.km = T.route[i][2]; T.returning = { id: sh.id, name: sh.name };
+    T.stages = makeStages(T.route).map(k => Math.max(k, T.km));
+    T.stageIdx = Math.max(0, T.stages.findIndex(k => k > T.km + 0.01));
+    recomputeHazards();
+    T.hazards.forEach(h => { if (h.startKm < T.km + 0.05) T.handled[h.id] = 1; });
+    T.lows.forEach(h => { if (h.startKm < T.km + 0.05) T.handled[h.id] = 1; });
+    renderRoutes(); renderDock(true);
+    logSys(`Regreso al refugio «${sh.name}» por radiación (${fmt(T.route[T.route.length - 1][2] - T.km, 1)} km).`);
+    T.events.push({ t: T.simMin, c: "var(--accent)", txt: `Regreso al refugio: ${sh.name}` });
+    sendToEarth(`Regresamos al refugio ${sh.name} por radiación (dosis EVA ${fmt(T.rad.total, 2)} mSv).`, [p[0], p[1]], "estado");
+    MR.API.send("misiones", { crew: T.crew.id, kind: "principal", name: T.crew.title, status: "regreso al refugio", km: T.km });
+    banner({ kind: "ok", title: "Regreso al refugio en marcha", sub: `Destino: ${sh.name}. Pulsa ▶ para continuar.`, ttl: 5000 });
+    T.playing = true; renderStatus();
+  }
+
   function criticalAlert(z) {
     T.playing = false; renderStatus(); T.alerts++;
     if (S.panel) togglePanel(null);
@@ -1383,7 +1479,7 @@
         m.querySelector("[data-y]").addEventListener("click", () => {
           closeModal(); logSys(`Misión abortada en km ${fmt(T.km)}. Regreso a la base.`);
           T.events.push({ t: T.simMin, c: "var(--danger)", txt: "Misión abortada" });
-          Object.assign(T, { mode: "base", route: null, km: 0, playing: false, adjusted: null, choice: "model", briefed: false, handled: {}, flags: {} });
+          Object.assign(T, { mode: "base", route: null, km: 0, playing: false, adjusted: null, choice: "model", briefed: false, handled: {}, flags: {}, returning: null });
           T.unread.misiones = 1; renderAll(true); MR.Map.fit();
           banner({ kind: "warn", title: "Misión abortada", sub: "De vuelta en el mapa base. Abre Misiones para retomar.", ttl: 6000 });
         });
@@ -1439,7 +1535,7 @@
           <div class="stat"><span class="v num">${fmt(minT, 0)} °C</span><span class="k">al final del tramo</span></div>
           <div class="stat"><span class="v num">${hz}</span><span class="k">tramos empinados</span></div></div>
         <div class="actions"><button class="btn" data-r>Descansar 1 h</button><button class="btn primary" data-c>Continuar</button></div>`;
-      card.querySelector("[data-r]").addEventListener("click", () => { T.simMin += 60; card.hidden = true; logSys("Descanso de 1 h."); renderStatus(); updateWeather(true); });
+      card.querySelector("[data-r]").addEventListener("click", () => { accrueDose(60); T.simMin += 60; card.hidden = true; logSys("Descanso de 1 h."); renderStatus(); updateWeather(true); });
       card.querySelector("[data-c]").addEventListener("click", () => { card.hidden = true; T.playing = true; renderStatus(); });
     }
     card.hidden = false;
@@ -1490,9 +1586,10 @@
     const inZone = T.hazards.find(z => T.km >= z.startKm - 0.05 && T.km <= z.endKm + 0.05);
     if (inZone) v *= 0.6;
     T.km = Math.min(L, T.km + (v * dMin) / 60); T.simMin += dMin;
+    accrueDose(dMin);
     // datos de condiciones cada 10 min marcianos
     if (T.simMin - T.lastWx >= 10) updateWeather();
-    if (T.simMin - T.lastTele >= 30) { T.lastTele = T.simMin; const p = curPos(); MR.API.send("telemetria", { crew: T.crew.id, t: T.simMin, km: T.km, lon: p[0], lat: p[1], elev: p[3], wx: T.wx }); }
+    if (T.simMin - T.lastTele >= 30) { T.lastTele = T.simMin; const p = curPos(); MR.API.send("telemetria", { crew: T.crew.id, t: T.simMin, km: T.km, lon: p[0], lat: p[1], elev: p[3], wx: T.wx, dosis_msv: T.rad.total }); }
     checkEvents(L);
   }
   function checkEvents(L) {
@@ -1505,6 +1602,8 @@
       triggerWeatherAlert();
       return;
     }
+    // radiación: aviso por evento solar / dosis y alerta crítica por umbral
+    if (checkRadiation()) return;
     // peligro crítico por delante (200 m)
     const z = T.hazards.find(z => !T.handled[z.id] && z.startKm - T.km <= 0.2 && z.endKm >= T.km);
     if (z) return criticalAlert(z);
@@ -1567,11 +1666,23 @@
     if (prev || force) renderLive(true);
   }
   function arrive() {
+    if (T.returning) return arriveShelter();
     T.playing = false; T.mode = "done"; T.km = T.route[T.route.length - 1][2];
     T.events.push({ t: T.simMin, c: "var(--nominal)", txt: "Meta alcanzada" });
     logSys(`Meta alcanzada: ${goalObj().name}.`);
     sendToEarth(`Llegamos a la meta: ${goalObj().name}. Coordenadas confirmadas.`, [goalObj().lon, goalObj().lat], "estado");
     MR.API.send("misiones", { crew: T.crew.id, kind: "principal", name: T.crew.title, status: "completada" });
+    renderAll();
+    setTimeout(openSummary, MR.reduceMotion() ? 0 : 700);
+  }
+
+  function arriveShelter() {
+    T.playing = false; T.mode = "done"; T.km = T.route[T.route.length - 1][2];
+    const sh = MR.SHELTERS.find(x => x.id === T.returning.id) || { lon: 0, lat: 0 };
+    T.events.push({ t: T.simMin, c: "var(--nominal)", txt: `Refugio alcanzado: ${T.returning.name}` });
+    logSys(`Refugio alcanzado: ${T.returning.name}. Dosis EVA total ${fmt(T.rad.total, 2)} mSv.`);
+    sendToEarth(`Llegamos al refugio ${T.returning.name}. Dosis EVA acumulada ${fmt(T.rad.total, 2)} mSv.`, [sh.lon, sh.lat], "estado");
+    MR.API.send("misiones", { crew: T.crew.id, kind: "principal", name: T.crew.title, status: "abortada", km: T.km });
     renderAll();
     setTimeout(openSummary, MR.reduceMotion() ? 0 : 700);
   }
@@ -1820,6 +1931,9 @@
     if (T.mode !== "walk") return;
     if (!T.wx) updateWeather();
     const p = curPos(), w = T.wx;
+    const rr = MR.radiation.rate(p, T.mobility, T.rad.spe, T.simMin), dayD = radToday(), thr = MR.cfg.radThr, speOn = MR.radiation.speActive(T.rad.spe, T.simMin);
+    const radSt = dayD >= thr ? "bad" : (speOn || dayD >= thr * 0.5) ? "warn" : "ok";
+    const radTxt = dayD >= thr ? "Umbral superado" : speOn ? "Evento solar" : dayD >= thr * 0.5 ? "Dosis alta" : `Hoy ${fmt(dayD, 2)} mSv`;
     const tiles = [
       { k: "Temperatura", v: fmt(w.air, 0), u: "°C", st: w.air < -65 ? "bad" : w.air < -50 ? "warn" : "ok", s: w.air < -65 ? "Extrema" : w.air < -50 ? "Fría" : "Nominal",
         src: "Sensor de aire REMS del rover Curiosity (perfil del sol elegido), corregido −2,5 °C por km de altura." },
@@ -1829,8 +1943,8 @@
         src: "Probabilidad (0–1) del modelo de bosque aleatorio de que el terreno se parezca al que Curiosity atravesó." },
       { k: "Radiación UV", v: fmt(w.uv, 1), u: "W/m²", st: w.uv > 12 ? "warn" : "ok", s: w.uv > 12 ? "Alta" : "Normal",
         src: "Sensor UV de REMS (Curiosity)." },
-      { k: "Presión", v: fmt(w.p, 0), u: "Pa", st: "ok", s: `${fmt(p[3], 0)} m altura`,
-        src: "Barómetro de REMS, ajustado a la altura con una escala de 11,1 km. 1 % de la presión de la Tierra." },
+      { k: "Radiación", v: fmt(rr * 1000, 0), u: "µSv/h", st: radSt, s: radTxt,
+        src: `Modelo simplificado, no una medición. Tasa base ≈ 27 µSv/h (0,65 mSv/día medidos por MSL-RAD en el piso de Gale; Simonsen, NASA 2024), ajustada por altura y relieve (supuestos). ${MR.radiation.speActive(T.rad.spe, T.simMin) ? "Evento solar activo: ×" + MR.radiation.P.speMult + " (supuesto). " : ""}${currentRegion === "gale" ? "" : "Fuera de Gale solo hay la referencia base. "}Dosis de hoy ${fmt(radToday(), 2)} mSv de ${fmt(MR.cfg.radThr, 1)} mSv (umbral configurable en Condiciones → Radiación).` },
     ];
     const box = $("live");
     if (box.children.length !== 5) {
@@ -1975,6 +2089,10 @@
         <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="m14 6-3.75 5 2.85 3.8-1.6 1.2-4.5-6L1 18h22L14 6z"/></svg>
         Terreno y Rutas
       </button>
+      <button role="tab" class="dash-tab-btn" data-tab="rad" aria-selected="${dashTab === "rad"}">
+        <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none"><circle cx="12" cy="12" r="4" fill="currentColor"/><path stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/></svg>
+        Radiación
+      </button>
       <button role="tab" class="dash-tab-btn" data-tab="mod" aria-selected="${dashTab === "mod"}">
         <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/></svg>
         Modelo Predictivo
@@ -2015,6 +2133,7 @@
     if (!body) return;
     if (dashTab === "atm") dashAtm(body);
     else if (dashTab === "ter") dashTerrain(body);
+    else if (dashTab === "rad") dashRad(body);
     else dashModel(body);
   }
 
@@ -2080,6 +2199,39 @@
     });
     MR.barH($("slopeBars"), items, { label: "Distancia por pendiente", labelW: 170 });
   }
+  function dashRad(body) {
+    const R = T.rad, P = MR.radiation.P, thr = MR.cfg.radThr, walking = T.mode === "walk";
+    const p = curPos() || T.baseRoute[0];
+    const rate = MR.radiation.rate(p, T.mobility, R.spe, T.simMin), on = MR.radiation.speActive(R.spe, T.simMin);
+    const day = T.mode === "walk" || T.mode === "done" ? radToday() : 0;
+    const planned = MR.routeResources(activeRoute() || T.baseRoute, T.mobility || "rover");
+    const mob = T.mobility === "rover" ? "rover presurizado" : "a pie con traje";
+    body.innerHTML = `<p class="rad-note"><span class="tag-sup">MODELO SIMPLIFICADO</span> No es una medición ni un pronóstico. Estima la dosis de quien está al aire libre en cada punto de la ruta y sirve para comparar rutas y probar alertas.</p>
+      <div class="grid-3">
+        <div class="card"><div class="kpi"><span class="v num">${fmt(rate * 1000, 0)}<small> µSv/h</small></span><span class="k">Tasa de dosis en tu posición (${mob}${on ? ", evento solar activo" : ""}). Base del piso de Gale: 27 µSv/h.</span></div></div>
+        <div class="card"><div class="kpi"><span class="v num">${fmt(day, 2)}<small> mSv</small></span><span class="k">Dosis EVA de hoy, de ${fmt(thr, 1)} mSv de umbral. Acumulada en el viaje: ${fmt(R.total, 2)} mSv.</span></div></div>
+        <div class="card"><div class="kpi"><span class="v num">${fmt(planned.radDose, 2)}<small> mSv</small></span><span class="k">Prevista para la ruta completa (${mob}, sin evento solar).</span></div></div></div>
+      <div class="grid-2" style="margin-top:16px">
+        <div class="card"><h3>Umbral de alerta</h3>
+          <label class="slider">Dosis EVA por jornada <output id="radOut">${fmt(thr, 1)} mSv</output>
+            <input type="range" id="radThr" min="0.5" max="50" step="0.5" value="${thr}"></label>
+          <p class="desc">Aviso al 50 % y alerta crítica al 100 %. Es un umbral operativo de esta app <span class="tag-sup">SUPUESTO</span>, no un límite de la NASA. Como referencia, el límite de la NASA para un evento solar es 250 mSv de dosis efectiva y 600 mSv para toda la carrera (Simonsen 2024; Tasoula et al.).</p>
+          <h3 style="margin-top:14px">Evento solar (demostración)</h3>
+          <p class="desc">${on ? `Evento activo: la dosis al aire libre es ×${P.speMult} (supuesto) durante ${P.speHours} h.` : "Sin evento. Los eventos solares no se pueden pronosticar con precisión: aquí se simulan a demanda."}</p>
+          ${walking ? (on ? `<button class="btn" id="btnSpeOff">Terminar evento</button>` : `<button class="btn primary" id="btnSpeOn">Simular evento solar ahora</button>`) : `<p class="desc">Disponible durante el recorrido.</p>`}</div>
+        <div class="card"><h3>Qué supone el modelo</h3>
+          <ul class="explain rad-list">${MR.radiation.ASSUMPTIONS.map(a => `<li><span class="tag-${a.kind === "fuente" ? "src" : "sup"}">${a.kind === "fuente" ? "FUENTE" : "SUPUESTO"}</span> <b>${esc(a.k)}:</b> ${esc(a.v)}. ${esc(a.n)}</li>`).join("")}</ul>
+          <p class="desc" style="margin-top:8px">Fuentes: Simonsen (NASA HQ, 2024); Tasoula et al., <i>Health Impacts of Radiation in Space</i>. Detalle en docs/NOTAS_FUENTES.md.</p></div></div>`;
+    const sl = $("radThr");
+    sl.addEventListener("input", e => { MR.cfg.radThr = +e.target.value; $("radOut").textContent = fmt(MR.cfg.radThr, 1) + " mSv"; });
+    sl.addEventListener("change", () => { MR.store.set("radThr", MR.cfg.radThr); toast("Umbral de radiación actualizado"); renderLive(true); renderDashboardTabContent(); });
+    const on1 = $("btnSpeOn"), off1 = $("btnSpeOff");
+    if (on1) on1.addEventListener("click", () => {
+      R.spe = MR.radiation.startSpe(T.simMin); delete R.flags["spe" + time().sol]; delete R.flags.speEnd;
+      closeDashboard(); setTimeout(() => { if (!checkRadiation()) toast("Evento solar simulado · pulsa ▶ para continuar"); }, 60);
+    });
+    if (off1) off1.addEventListener("click", () => { R.spe = null; R.flags.speSeen = 0; renderDashboardTabContent(); renderLive(true); });
+  }
   function dashModel(body) {
     const M = D.model.metrics.test, FI = D.model.feature_importance;
     const names = { slope: "Pendiente", roughness: "Rugosidad", texture: "Textura óptica", gradient: "Gradiente óptico", thermal: "Térmico" };
@@ -2112,15 +2264,16 @@
     const hrs = (T.simMin - EVA_START * 60) / 60;
     el.innerHTML = `<header class="fv-head"><button class="btn" data-back>↩ Volver al mapa</button><div><h2>Resumen de la misión</h2><div class="sub">${T.crew.short} · ${T.crew.role}</div></div></header>
       <div class="fv-body"><div class="sum-hero"><div>
-        <h1><span class="ok">${MR.ICONS.ok}</span>Misión completada</h1>
-        <p style="color:var(--text-2);font-size:16px;margin:0">${esc(T.crew.title)} · llegada ${time().label}</p>
+        <h1><span class="ok">${MR.ICONS.ok}</span>${T.returning ? "Regreso al refugio completado" : "Misión completada"}</h1>
+        <p style="color:var(--text-2);font-size:16px;margin:0">${T.returning ? `Misión interrumpida por radiación · ${esc(T.returning.name)}` : esc(T.crew.title)} · llegada ${time().label}</p>
         <div class="sum-stats">
           <div class="stat"><span class="v num">${fmt(st.length, 1)}</span><span class="k">km recorridos</span></div>
           <div class="stat"><span class="v num">${sols}</span><span class="k">${sols === 1 ? "sol" : "soles"} (${fmt(hrs, 0)} h)</span></div>
           <div class="stat"><span class="v num">+${fmt(st.maxElev - R[0][3], 0)}</span><span class="k">m de desnivel</span></div>
           <div class="stat"><span class="v num">${T.findings.length}</span><span class="k">hallazgos</span></div>
           <div class="stat"><span class="v num">${sec}</span><span class="k">secundarias completadas</span></div>
-          <div class="stat"><span class="v num">${T.alerts}</span><span class="k">alertas atendidas · ${T.detours} desvíos</span></div></div>
+          <div class="stat"><span class="v num">${T.alerts}</span><span class="k">alertas atendidas · ${T.detours} desvíos</span></div>
+          <div class="stat" title="Modelo simplificado: solo cuenta las horas al aire libre"><span class="v num">${fmt(T.rad.total, 2)}</span><span class="k">mSv de dosis EVA · modelo simplificado</span></div></div>
         <div class="actions" style="display:flex;gap:8px"><button class="btn primary" data-new>Nueva misión</button><button class="btn" data-log>Ver bitácora</button></div>
         <h3 style="margin:24px 0 10px;font-size:15px">Línea de tiempo</h3><ol class="timeline"></ol></div>
         <div><div class="sum-map"><img alt="Mapa del recorrido" src="assets/basemap_${S.base === "thermal" ? "relief" : S.base}.jpg"><svg viewBox="0 0 1200 1200" aria-hidden="true"></svg></div>
